@@ -15,18 +15,14 @@
  *
 */
 
-#include "DispenseItem.hpp"
-
-bool is_newer(const builtin_interfaces::msg::Time& a, const builtin_interfaces::msg::Time& b)
-{
-  return a.sec > b.sec || (a.sec == b.sec && a.nanosec > b.nanosec);
-}
+#include "IngestItem.hpp"
+#include "Utils.hpp"
 
 namespace rmf_fleet_adapter {
 namespace phases {
 
 //==============================================================================
-std::shared_ptr<DispenseItem::ActivePhase> DispenseItem::ActivePhase::make(
+std::shared_ptr<IngestItem::ActivePhase> IngestItem::ActivePhase::make(
   agv::RobotContextPtr context,
   std::string request_guid,
   std::string target,
@@ -46,38 +42,38 @@ std::shared_ptr<DispenseItem::ActivePhase> DispenseItem::ActivePhase::make(
 }
 
 //==============================================================================
-const rxcpp::observable<Task::StatusMsg>& DispenseItem::ActivePhase::observe() const
+const rxcpp::observable<Task::StatusMsg>& IngestItem::ActivePhase::observe() const
 {
   return _obs;
 }
 
 //==============================================================================
-rmf_traffic::Duration DispenseItem::ActivePhase::estimate_remaining_time() const
+rmf_traffic::Duration IngestItem::ActivePhase::estimate_remaining_time() const
 {
   // TODO: implement
   return rmf_traffic::Duration{0};
 }
 
 //==============================================================================
-void DispenseItem::ActivePhase::emergency_alarm(bool on)
+void IngestItem::ActivePhase::emergency_alarm(bool on)
 {
   // TODO: implement
 }
 
 //==============================================================================
-void DispenseItem::ActivePhase::cancel()
+void IngestItem::ActivePhase::cancel()
 {
   // no op
 }
 
 //==============================================================================
-const std::string& DispenseItem::ActivePhase::description() const
+const std::string& IngestItem::ActivePhase::description() const
 {
   return _description;
 }
 
 //==============================================================================
-DispenseItem::ActivePhase::ActivePhase(
+IngestItem::ActivePhase::ActivePhase(
   agv::RobotContextPtr context,
   std::string request_guid,
   std::string target,
@@ -103,7 +99,7 @@ DispenseItem::ActivePhase::ActivePhase(
 }
 
 //==============================================================================
-void DispenseItem::ActivePhase::_init_obs()
+void IngestItem::ActivePhase::_init_obs()
 {
   using rmf_dispenser_msgs::msg::DispenserResult;
   using rmf_dispenser_msgs::msg::DispenserState;
@@ -152,7 +148,7 @@ void DispenseItem::ActivePhase::_init_obs()
 }
 
 //==============================================================================
-Task::StatusMsg DispenseItem::ActivePhase::_get_status(
+Task::StatusMsg IngestItem::ActivePhase::_get_status(
   const rmf_dispenser_msgs::msg::DispenserResult::SharedPtr& dispenser_result,
   const rmf_dispenser_msgs::msg::DispenserState::SharedPtr& dispenser_state)
 {
@@ -208,7 +204,7 @@ Task::StatusMsg DispenseItem::ActivePhase::_get_status(
 }
 
 //==============================================================================
-void DispenseItem::ActivePhase::_do_publish()
+void IngestItem::ActivePhase::_do_publish()
 {
   rmf_dispenser_msgs::msg::DispenserRequest msg{};
   msg.request_guid = _request_guid;
@@ -219,7 +215,7 @@ void DispenseItem::ActivePhase::_do_publish()
 }
 
 //==============================================================================
-DispenseItem::PendingPhase::PendingPhase(
+IngestItem::PendingPhase::PendingPhase(
   agv::RobotContextPtr context,
   std::string request_guid,
   std::string target,
@@ -245,9 +241,9 @@ DispenseItem::PendingPhase::PendingPhase(
 }
 
 //==============================================================================
-std::shared_ptr<Task::ActivePhase> DispenseItem::PendingPhase::begin()
+std::shared_ptr<Task::ActivePhase> IngestItem::PendingPhase::begin()
 {
-  return DispenseItem::ActivePhase::make(
+  return IngestItem::ActivePhase::make(
     _context,
     _request_guid,
     _target,
@@ -256,14 +252,14 @@ std::shared_ptr<Task::ActivePhase> DispenseItem::PendingPhase::begin()
 }
 
 //==============================================================================
-rmf_traffic::Duration DispenseItem::PendingPhase::estimate_phase_duration() const
+rmf_traffic::Duration IngestItem::PendingPhase::estimate_phase_duration() const
 {
   // TODO: implement
   return rmf_traffic::Duration{0};
 }
 
 //==============================================================================
-const std::string& DispenseItem::PendingPhase::description() const
+const std::string& IngestItem::PendingPhase::description() const
 {
   return _description;
 }

@@ -30,6 +30,7 @@ set(dep_pkgs
   rclcpp
   rmf_utils
   rmf_dispenser_msgs
+  rmf_ingestor_msgs
   rmf_door_msgs
   rmf_fleet_msgs
   rmf_lift_msgs
@@ -154,6 +155,7 @@ target_link_libraries(full_control
     rmf_fleet_adapter
     ${rmf_task_msgs_LIBRARIES}
     ${rmf_dispenser_msgs_LIBRARIES}
+    ${rmf_ingestor_msgs_LIBRARIES}
     ${rmf_door_msgs_LIBRARIES}
     ${rmf_lift_msgs_LIBRARIES}
     ${std_msgs_LIBRARIES}
@@ -163,6 +165,7 @@ target_include_directories(full_control
   PRIVATE
     ${rmf_task_msgs_INCLUDE_DIRS}
     ${rmf_dispenser_msgs_INCLUDE_DIRS}
+    ${rmf_ingestor_msgs_INCLUDE_DIRS}
     ${rmf_door_msgs_INCLUDE_DIRS}
     ${rmf_lift_msgs_INCLUDE_DIRS}
     ${std_msgs_INCLUDE_DIRS}

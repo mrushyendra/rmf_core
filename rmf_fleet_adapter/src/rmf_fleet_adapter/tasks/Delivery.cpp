@@ -16,6 +16,7 @@
 */
 
 #include "../phases/DispenseItem.hpp"
+#include "../phases/IngestItem.hpp"
 #include "../phases/GoToPlace.hpp"
 
 #include "Delivery.hpp"
@@ -56,7 +57,7 @@ std::shared_ptr<Task> make_delivery(
         phases::GoToPlace::make(context, std::move(dropoff_start), dropoff_wp));
 
   phases.push_back(
-        std::make_unique<phases::DispenseItem::PendingPhase>(
+        std::make_unique<phases::IngestItem::PendingPhase>(
           context,
           request.task_id,
           request.dropoff_dispenser,
