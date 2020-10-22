@@ -346,17 +346,17 @@ SCENARIO("Grid World")
         planner);
     rmf_task::agv::TaskPlanner task_planner(task_config);
 
-    const auto greedy_assignments = task_planner.greedy_plan(
+    /*const auto greedy_assignments = task_planner.greedy_plan(
       now, initial_states, state_configs, requests);
-    const double greedy_cost = task_planner.compute_cost(greedy_assignments);
+    const double greedy_cost = task_planner.compute_cost(greedy_assignments);*/
 
     const auto optimal_assignments = task_planner.optimal_plan(
       now, initial_states, state_configs, requests, nullptr);
     const double optimal_cost = task_planner.compute_cost(optimal_assignments);
   
-    display_solution("Greedy", greedy_assignments, greedy_cost);
+    //display_solution("Greedy", greedy_assignments, greedy_cost);
     display_solution("Optimal", optimal_assignments, optimal_cost);
 
-    REQUIRE(optimal_cost <= greedy_cost);
+    //REQUIRE(optimal_cost <= greedy_cost);
   }
 }
