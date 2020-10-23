@@ -360,7 +360,7 @@ SCENARIO("Grid World")
     //REQUIRE(optimal_cost <= greedy_cost);
   }
 
-  WHEN("test 3")
+  /*WHEN("test 3")
   {
     const auto now = std::chrono::steady_clock::now();
     const double default_orientation = 0.0;
@@ -511,7 +511,7 @@ SCENARIO("Grid World")
     //REQUIRE(optimal_cost <= greedy_cost);
   }
 
-  /*WHEN("test 4")
+  WHEN("test 4")
   {
     const auto now = std::chrono::steady_clock::now();
     const double default_orientation = 0.0;

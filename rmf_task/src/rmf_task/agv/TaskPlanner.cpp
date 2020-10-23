@@ -200,7 +200,6 @@ public:
   Candidates(const Candidates& other)
   {
     _value_map = other._value_map;
-    _invalid = other._invalid;
     _add_charging_task = other._add_charging_task;
     _old_states = other._old_states;
     _update_map();
@@ -209,7 +208,6 @@ public:
   Candidates& operator=(const Candidates& other)
   {
     _value_map = other._value_map;
-    _invalid = other._invalid;
     _add_charging_task = other._add_charging_task;
     _old_states = other._old_states;
     _update_map();
@@ -261,24 +259,12 @@ public:
     rmf_traffic::Time wait_until)
   {
     const auto it = _candidate_map.at(candidate);
-    if(it == _value_map.end()){//move from invalid to _value_map
-      _invalid.erase(candidate);
-    } else {
-      _value_map.erase(it);
-    }
+    _value_map.erase(it);
     _candidate_map[candidate] = _value_map.insert(
       {
         state.finish_time(),
         Entry{candidate, state, wait_until}
       });
-  }
-
-  void move_to_invalid(std::size_t candidate)
-  {
-    auto it = _candidate_map.at(candidate);
-    _invalid.insert(candidate);
-    _value_map.erase(it);
-    _candidate_map[candidate] = _value_map.end();
   }
 
   void update_charge(std::size_t candidate, bool val){
@@ -302,7 +288,6 @@ private:
   std::vector<Map::iterator> _candidate_map;
   std::vector<bool> _add_charging_task;
   std::vector<State> _old_states;
-  std::unordered_set<std::size_t> _invalid;
 
   Candidates(Map candidate_values, std::vector<bool> add_charging_task, std::vector<State> old_states)
     : _value_map(std::move(candidate_values)), _add_charging_task(add_charging_task), _old_states(old_states)
@@ -316,8 +301,8 @@ private:
     {
       const auto c = it->second.candidate;
       if (_candidate_map.size() <= c){
-        _candidate_map.resize(std::max(c+1, _value_map.size() + _invalid.size()), _value_map.end());//hack
-        _add_charging_task.resize(std::max(c+1, _value_map.size() + _invalid.size()), false);//hack
+        _candidate_map.resize(c+1);
+        _add_charging_task.resize(c+1, false);
       }
       _candidate_map[c] = it;
     }
@@ -365,7 +350,7 @@ Candidates Candidates::make(
                   << "] and request [" << request.id() << " ]" << std::endl;
         assert(false);
       }
-    }  
+    }
     
   }
 
