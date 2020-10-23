@@ -201,7 +201,7 @@ public:
   {
     _value_map = other._value_map;
     _add_charging_task = other._add_charging_task;
-    _old_states = other._old_states;
+    //_old_states = other._old_states;
     _update_map();
   }
 
@@ -209,7 +209,7 @@ public:
   {
     _value_map = other._value_map;
     _add_charging_task = other._add_charging_task;
-    _old_states = other._old_states;
+    //_old_states = other._old_states;
     _update_map();
     return *this;
   }
@@ -267,30 +267,34 @@ public:
       });
   }
 
-  void update_charge(std::size_t candidate, bool val){
-    _add_charging_task[candidate] = val;
+  std::optional<State> get_old_state(const std::size_t candidate) const
+  {
+    auto it = _add_charging_task.find(candidate);
+    return (it == _add_charging_task.end()) ? std::nullopt :
+      std::optional<State>(it->second);
   }
 
-  bool charge_val(const std::size_t candidate) const {
-    return _add_charging_task[candidate];
+  void set_old_state(const std::size_t candidate, const State& s)
+  {
+    _add_charging_task.insert(std::make_pair(candidate,s));
   }
 
-  State get_old_state(const std::size_t candidate) const {
-    return _old_states[candidate];
-  }
-
-  void set_old_state(const std::size_t candidate, State s){
-    _old_states[candidate] = s;
+  void remove_old_state(const std::size_t candidate)
+  {
+    auto it = _add_charging_task.find(candidate);
+    if(it != _add_charging_task.end())
+    {
+      _add_charging_task.erase(it);
+    }
   }
 
 private:
   Map _value_map;
   std::vector<Map::iterator> _candidate_map;
-  std::vector<bool> _add_charging_task;
-  std::vector<State> _old_states;
+  std::unordered_map<std::size_t, State> _add_charging_task;
 
-  Candidates(Map candidate_values, std::vector<bool> add_charging_task, std::vector<State> old_states)
-    : _value_map(std::move(candidate_values)), _add_charging_task(add_charging_task), _old_states(old_states)
+  Candidates(Map candidate_values, std::unordered_map<std::size_t, State> add_charging_task)
+    : _value_map(std::move(candidate_values)), _add_charging_task(std::move(add_charging_task))
   {
     _update_map();
   }
@@ -302,7 +306,6 @@ private:
       const auto c = it->second.candidate;
       if (_candidate_map.size() <= c){
         _candidate_map.resize(c+1);
-        _add_charging_task.resize(c+1, false);
       }
       _candidate_map[c] = it;
     }
@@ -316,8 +319,7 @@ Candidates Candidates::make(
     const rmf_task::Request& charge_battery_request)
 {
   Map initial_map;
-  std::vector<bool> add_charging_task(initial_states.size(), false);
-  std::vector<State> old_states(initial_states);
+  std::unordered_map<std::size_t, State> add_charging_task;
   for (std::size_t i = 0; i < initial_states.size(); ++i)
   {
     const auto& state = initial_states[i];
@@ -335,7 +337,7 @@ Candidates Candidates::make(
         charge_battery_request.estimate_finish(state, state_config);
       if (battery_estimate.has_value())
       {
-        add_charging_task[i] = true;
+        add_charging_task.insert(std::make_pair(i,state));
 
         auto new_finish = request.estimate_finish(
           battery_estimate.value().finish_state(), state_config);
@@ -354,7 +356,7 @@ Candidates Candidates::make(
     
   }
 
-  return Candidates(std::move(initial_map), add_charging_task, old_states);
+  return Candidates(initial_map, add_charging_task);
 }
 
 // ============================================================================
@@ -948,12 +950,13 @@ public:
 
     // option 2
     // add charging task if needed
-    if(u.second.candidates.charge_val(entry.candidate))
+    std::optional<State> add_charging_task = u.second.candidates.get_old_state(entry.candidate);
+    if(add_charging_task)
     {
       const auto& state_config = state_configs[entry.candidate];
-      State s = u.second.candidates.get_old_state(entry.candidate);
-      auto charge_battery = make_charging_request(s.finish_time());
-      auto battery_estimate = charge_battery->estimate_finish(s, state_config);
+      State& old_state = *add_charging_task;
+      auto charge_battery = make_charging_request(old_state.finish_time());
+      auto battery_estimate = charge_battery->estimate_finish(old_state, state_config);
       if (battery_estimate.has_value())
       {
         new_node->assigned_tasks[entry.candidate].push_back(
@@ -1006,8 +1009,7 @@ public:
           finish.value().wait_until());
         
         //option 2
-        new_u.second.candidates.update_charge(entry.candidate, false);
-        new_u.second.candidates.set_old_state(entry.candidate, finish.value().finish_state());
+        new_u.second.candidates.remove_old_state(entry.candidate);
       }
       else
       {
@@ -1027,7 +1029,6 @@ public:
          auto battery_estimate = charge_battery->estimate_finish(entry.state, state_config);
          if (battery_estimate.has_value())
          {
-           new_u.second.candidates.update_charge(entry.candidate, true);
            new_u.second.candidates.set_old_state(entry.candidate, entry.state);
            auto new_finish =
              new_u.second.request->estimate_finish(
@@ -1141,8 +1142,7 @@ public:
 
       for (auto& new_u : new_node->unassigned_tasks)
       {
-        new_u.second.candidates.update_charge(agent, false);
-        //new_u.second.candidates.set_old_state(agent, estimate.value().finish_state());
+        new_u.second.candidates.remove_old_state(agent);
         const auto finish =
           new_u.second.request->estimate_finish(
             estimate.value().finish_state(), state_configs[agent]);
