@@ -39,6 +39,34 @@
 #include <rmf_utils/catch.hpp>
 
 #include <iostream>
+#include <vector>
+#include <tuple>
+#include <utility>
+#include <random>
+
+using Assignments = std::vector<std::vector<rmf_task::agv::TaskPlanner::Assignment>>;
+
+std::pair<std::vector<std::vector<std::tuple<int,int,int>>>, std::vector<std::vector<int>>>
+  generate_testcases(size_t max, size_t num_tasks, size_t num_testcases);
+std::pair<std::vector<std::tuple<int,int,int>>, std::vector<int>>
+  generate_testcase(size_t max, size_t num_tasks, std::mt19937& eng);
+void run_tests(std::vector<std::vector<std::tuple<int,int,int>>> tests,
+  std::vector<std::vector<int>> test_waypoints,
+  const rmf_battery::agv::BatterySystem& battery_system,
+  std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
+  std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
+  bool drain_battery);
+std::pair<Assignments, double> compute_optimal(const std::vector<std::tuple<int,int,int>>& request_data,
+  size_t initial_pt,
+  size_t initial_pt2,
+  size_t charging_pt,
+  size_t charging_pt2,
+  const rmf_battery::agv::BatterySystem& battery_system,
+  std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
+  std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
+  bool drain_battery);
 
 //==============================================================================
 inline void display_solution(
@@ -130,7 +158,7 @@ SCENARIO("Grid World")
   std::shared_ptr<SimpleDevicePowerSink> device_sink =
     std::make_shared<SimpleDevicePowerSink>(battery_system, power_system);
 
-  WHEN("Planning for 3 requests and 2 agents")
+  /*WHEN("Planning for 3 requests and 2 agents")
   {
     const auto now = std::chrono::steady_clock::now();
     const double default_orientation = 0.0;
@@ -346,311 +374,9 @@ SCENARIO("Grid World")
         planner);
     rmf_task::agv::TaskPlanner task_planner(task_config);
 
-    /*const auto greedy_assignments = task_planner.greedy_plan(
+    const auto greedy_assignments = task_planner.greedy_plan(
       now, initial_states, state_configs, requests);
-    const double greedy_cost = task_planner.compute_cost(greedy_assignments);*/
-
-    const auto optimal_assignments = task_planner.optimal_plan(
-      now, initial_states, state_configs, requests, nullptr);
-    const double optimal_cost = task_planner.compute_cost(optimal_assignments);
-  
-    //display_solution("Greedy", greedy_assignments, greedy_cost);
-    display_solution("Optimal", optimal_assignments, optimal_cost);
-
-    //REQUIRE(optimal_cost <= greedy_cost);
-  }
-
-  WHEN("test 3")
-  {
-    const auto now = std::chrono::steady_clock::now();
-    const double default_orientation = 0.0;
-
-    rmf_traffic::agv::Plan::Start first_location{now, 13, default_orientation};
-    rmf_traffic::agv::Plan::Start second_location{now, 2, default_orientation};
-
-    std::vector<rmf_task::agv::State> initial_states =
-    {
-      rmf_task::agv::State{first_location, 13, 1.0},
-      rmf_task::agv::State{second_location, 2, 1.0}
-    };
-
-    std::vector<rmf_task::agv::StateConfig> state_configs =
-    {
-      rmf_task::agv::StateConfig{0.2},
-      rmf_task::agv::StateConfig{0.2}
-    };
-
-    std::vector<rmf_task::Request::SharedPtr> requests =
-    {
-      rmf_task::requests::Delivery::make(
-        1,
-        2,
-        3,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(0),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        2,
-        15,
-        4,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(0),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        3,
-        7,
-        12,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(0),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        4,
-        8,
-        11,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(50000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        5,
-        10,
-        0,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(50000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        6,
-        1,
-        8,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(60000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        7,
-        8,
-        7,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(60000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        8,
-        5,
-        11,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(60000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        9,
-        9,
-        12,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(60000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        10,
-        1,
-        5,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(60000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        11,
-        0,
-        10,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(60000),
-        drain_battery)
-    };
-
-    std::shared_ptr<rmf_task::agv::TaskPlanner::Configuration>  task_config =
-      std::make_shared<rmf_task::agv::TaskPlanner::Configuration>(
-        battery_system,
-        motion_sink,
-        device_sink,
-        planner);
-    rmf_task::agv::TaskPlanner task_planner(task_config);
-
-    const auto optimal_assignments = task_planner.optimal_plan(
-      now, initial_states, state_configs, requests, nullptr);
-    const double optimal_cost = task_planner.compute_cost(optimal_assignments);
-  
-    //display_solution("Greedy", greedy_assignments, greedy_cost);
-    display_solution("Optimal", optimal_assignments, optimal_cost);
-
-    //REQUIRE(optimal_cost <= greedy_cost);
-  }
-
-  /*WHEN("test 4")
-  {
-    const auto now = std::chrono::steady_clock::now();
-    const double default_orientation = 0.0;
-
-    rmf_traffic::agv::Plan::Start first_location{now, 13, default_orientation};
-    rmf_traffic::agv::Plan::Start second_location{now, 2, default_orientation};
-
-    std::vector<rmf_task::agv::State> initial_states =
-    {
-      rmf_task::agv::State{first_location, 9, 1.0},
-      rmf_task::agv::State{second_location, 2, 1.0}
-    };
-
-    std::vector<rmf_task::agv::StateConfig> state_configs =
-    {
-      rmf_task::agv::StateConfig{0.2},
-      rmf_task::agv::StateConfig{0.2}
-    };
-
-    std::vector<rmf_task::Request::SharedPtr> requests =
-    {
-      rmf_task::requests::Delivery::make(
-        1,
-        6,
-        3,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(0),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        2,
-        10,
-        7,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(0),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        3,
-        2,
-        12,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(0),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        4,
-        8,
-        11,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(50000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        5,
-        10,
-        6,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(70000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        6,
-        2,
-        9,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(70000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        7,
-        3,
-        4,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(70000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        8,
-        5,
-        11,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(70000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        9,
-        9,
-        1,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(70000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        10,
-        1,
-        5,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(70000),
-        drain_battery),
-
-      rmf_task::requests::Delivery::make(
-        11,
-        13,
-        10,
-        motion_sink,
-        device_sink,
-        planner,
-        now + rmf_traffic::time::from_seconds(70000),
-        drain_battery)
-    };
-
-    std::shared_ptr<rmf_task::agv::TaskPlanner::Configuration>  task_config =
-      std::make_shared<rmf_task::agv::TaskPlanner::Configuration>(
-        battery_system,
-        motion_sink,
-        device_sink,
-        planner);
-    rmf_task::agv::TaskPlanner task_planner(task_config);
+    const double greedy_cost = task_planner.compute_cost(greedy_assignments);
 
     const auto optimal_assignments = task_planner.optimal_plan(
       now, initial_states, state_configs, requests, nullptr);
@@ -661,4 +387,224 @@ SCENARIO("Grid World")
 
     //REQUIRE(optimal_cost <= greedy_cost);
   }*/
+
+  std::vector<std::tuple<int,int,int>> test1 {
+    {2,3,0},
+    {15,4,0},
+    {7,12,0},
+    {8,11,50000},
+    {10,0,50000},
+    {1,8,60000},
+    {8,7,60000},
+    {5,11,60000},
+    {9,12,60000},
+    {1,5,60000},
+    {0,10,60000}};
+
+  std::vector<int> test1_waypoints {13, 2, 13, 2};
+
+  std::vector<std::tuple<int,int,int>> test2 {
+    {6,3,0},
+    {10,7,0},
+    {2,12,0},
+    {8,11,50000},
+    {10,6,70000},
+    {2,9,70000},
+    {3,4,70000},
+    {5,11,70000},
+    {9,1,70000},
+    {1,5,70000},
+    {13,10,70000}};
+
+  std::vector<int> test2_waypoints {13, 2, 9, 2};
+
+  std::vector<std::tuple<int,int,int>> test3 {
+    {2,3,0},
+    {8,4,0},
+    {4,1,0},
+    {3,7,50000},
+    {14,2,50000},
+    {3,8,60000},
+    {5,7,60000},
+    {5,1,60000},
+    {10,12,60000},
+    {1,5,60000},
+    {8,10,60000}};
+  
+  std::vector<int> test3_waypoints {13, 2, 13, 2};
+
+  std::vector<std::tuple<int,int,int>> test4 {
+    {9,12,0},
+    {5,9,0},
+    {2,4,0},
+    {14,7,50000},
+    {14,2,50000},
+    {3,1,60000},
+    {8,2,60000},
+    {5,11,60000},
+    {9,4,60000},
+    {6,7,60000},
+    {12,4,60000}};
+
+  std::vector<int> test4_waypoints {13, 2, 13, 2};
+
+  std::vector<std::tuple<int,int,int>> test_unoptimal {
+    {15,11,0},
+    {5,8,0},
+    {3,14,0},
+    {2,8,0},
+    {3,15,0}};
+
+  std::vector<int> test_unoptimal_waypoints {13, 2, 13, 2};
+
+  std::vector<std::tuple<int,int,int>> test_unoptimal2 {
+    {7,3,0},
+    {10,1,0},
+    {6,11,0},
+    {11,8,0}};
+
+  std::vector<int> test_unoptimal_waypoints2 {13, 2, 13, 2};
+
+  std::vector<std::vector<std::tuple<int,int,int>>> tests {test4};//{test1, test2, test3, test4};
+  std::vector<std::vector<int>> test_waypoints {test4_waypoints};//{test1_waypoints, test2_waypoints, test3_waypoints, test4_waypoints};
+
+  run_tests(tests, test_waypoints, battery_system, planner, motion_sink, device_sink,drain_battery);
+
+  std::pair<std::vector<std::vector<std::tuple<int,int,int>>>, std::vector<std::vector<int>>> auto_gen_testcases = generate_testcases(15, 7, 20);
+  /*for(int num = 0; num < auto_gen_testcases.first.size(); ++num){
+    for(int i = 0; i < auto_gen_testcases.first[num].size(); ++i){
+      std::cout << "{" << std::get<0>(auto_gen_testcases.first[num][i]) << "," << std::get<1>(auto_gen_testcases.first[num][i])
+        << "," << std::get<2>(auto_gen_testcases.first[num][i]) << "}" << std::endl;
+    }
+    std::cout << std::endl;
+  }*/
+
+  //run_tests(auto_gen_testcases.first, auto_gen_testcases.second, battery_system, planner, motion_sink, device_sink,drain_battery);
+}
+
+std::pair<std::vector<std::tuple<int,int,int>>, std::vector<int>> generate_testcase(size_t max, size_t num_tasks, std::mt19937& eng){
+  // a distribution that takes randomness and produces values in specified range
+  std::uniform_int_distribution<> dist(1,max);
+  std::vector<std::tuple<int,int,int>> tasks;
+  for(size_t i = 0; i < num_tasks; ++i){
+    int from = dist(eng);
+    int to = dist(eng);
+    while(to == from){
+      to = dist(eng);
+    }
+    std::tuple<int,int,int> task{from, to, 0};
+    tasks.push_back(task);
+  }
+
+  std::vector<int> waypoints {13, 2, 13, 2}; //hardcode
+  return make_pair(tasks, waypoints);
+}
+
+std::pair<std::vector<std::vector<std::tuple<int,int,int>>>, std::vector<std::vector<int>>> generate_testcases(size_t max, size_t num_tasks, size_t num_testcases){
+  // create source of randomness, and initialize it with non-deterministic seed
+  std::random_device r;
+  std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
+  std::mt19937 eng{1242};
+  //std::mt19937 eng{seed};
+
+  std::vector<std::vector<std::tuple<int,int,int>>> testcases;
+  std::vector<std::vector<int>> waypoints;
+  for(size_t i = 0; i < num_testcases; ++i){
+    auto testcase = generate_testcase(max, num_tasks, eng);
+    testcases.push_back(testcase.first);
+    waypoints.push_back(testcase.second);
+  }
+  return make_pair(testcases, waypoints);
+}
+
+void run_tests(std::vector<std::vector<std::tuple<int,int,int>>> tests,
+  std::vector<std::vector<int>> test_waypoints,
+  const rmf_battery::agv::BatterySystem& battery_system,
+  std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
+  std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
+  bool drain_battery)
+{
+  std::vector<std::pair<Assignments, double>> optimals;
+
+  for(size_t i = 0; i < tests.size(); ++i){
+    auto& waypoints = test_waypoints[i];
+    auto& test = tests[i];
+    std::pair<Assignments, double> optimal_assignment = compute_optimal(test, waypoints[0],
+      waypoints[1], waypoints[2], waypoints[3], battery_system, planner,
+      motion_sink, device_sink, drain_battery);
+    optimals.push_back(std::move(optimal_assignment));    
+  }
+
+  for(size_t i = 0; i < optimals.size(); ++i){
+    std::cout << "i: " << i << std::endl;
+    display_solution("Optimal", optimals[i].first, optimals[i].second);
+  }
+
+  double avg = 0;
+  for(size_t i = 0; i < optimals.size(); ++i){
+    std::cout << optimals[i].second << " , ";
+    avg += optimals[i].second;
+  }
+  std::cout << std::endl;
+  std::cout << "Average cost: " << avg/(double)optimals.size() << std::endl;
+
+}
+
+std::pair<Assignments, double> compute_optimal(const std::vector<std::tuple<int,int,int>>& request_data,
+  size_t initial_pt,
+  size_t initial_pt2,
+  size_t charging_pt,
+  size_t charging_pt2,
+  const rmf_battery::agv::BatterySystem& battery_system,
+  std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
+  std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
+  bool drain_battery)
+{
+  const auto now = std::chrono::steady_clock::now();
+  const double default_orientation = 0.0;
+
+  rmf_traffic::agv::Plan::Start first_location{now, initial_pt, default_orientation};
+  rmf_traffic::agv::Plan::Start second_location{now, initial_pt2, default_orientation};
+
+  std::vector<rmf_task::agv::State> initial_states =
+  {
+    rmf_task::agv::State{first_location, charging_pt, 1.0},
+    rmf_task::agv::State{second_location, charging_pt2, 1.0}
+  };
+
+  std::vector<rmf_task::agv::StateConfig> state_configs =
+  {
+    rmf_task::agv::StateConfig{0.2},
+    rmf_task::agv::StateConfig{0.2}
+  };
+
+  std::vector<rmf_task::Request::SharedPtr> requests;
+  for(size_t i = 0; i < request_data.size(); ++i){
+    auto new_task = rmf_task::requests::Delivery::make(
+      i,
+      std::get<0>(request_data[i]),
+      std::get<1>(request_data[i]),
+      motion_sink,
+      device_sink,
+      planner,
+      now + rmf_traffic::time::from_seconds(std::get<2>(request_data[i])),
+      drain_battery);
+    requests.push_back(std::move(new_task));
+  }
+
+  std::shared_ptr<rmf_task::agv::TaskPlanner::Configuration>  task_config =
+    std::make_shared<rmf_task::agv::TaskPlanner::Configuration>(
+      battery_system,
+      motion_sink,
+      device_sink,
+      planner);
+  rmf_task::agv::TaskPlanner task_planner(task_config);
+
+  const auto optimal_assignments = task_planner.optimal_plan(
+    now, initial_states, state_configs, requests, nullptr);
+  const double optimal_cost = task_planner.compute_cost(optimal_assignments);
+
+  return(make_pair(optimal_assignments,optimal_cost));
 }

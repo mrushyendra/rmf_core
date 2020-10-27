@@ -35,6 +35,7 @@
 namespace rmf_task {
 namespace agv {
 
+bool original = false;
 
 //==============================================================================
 class TaskPlanner::Configuration::Implementation
@@ -276,7 +277,7 @@ public:
 
   void set_old_state(const std::size_t candidate, const State& s)
   {
-    _add_charging_task.insert(std::make_pair(candidate,s));
+    _add_charging_task.insert_or_assign(candidate,s);
   }
 
   void remove_old_state(const std::size_t candidate)
@@ -344,7 +345,7 @@ Candidates Candidates::make(
         assert(new_finish.has_value());
         initial_map.insert(
           {new_finish.value().finish_state().finish_time(),
-          Entry{i, new_finish.value().finish_state(), new_finish.value().wait_until()}});
+          Entry{i, new_finish.value().finish_state(), battery_estimate.value().wait_until()}});//new_finish.value().wait_until()}});
       }
       else
       {
@@ -464,9 +465,17 @@ using ConstNodePtr = std::shared_ptr<const Node>;
 // ============================================================================
 struct LowestCostEstimate
 {
-  bool operator()(const ConstNodePtr& a, const ConstNodePtr& b)
+  bool operator()(const ConstNodePtr& a, const ConstNodePtr& b) const
   {
     return b->cost_estimate < a->cost_estimate;
+  }
+};
+
+struct LowestCostEstimateSet
+{
+  bool operator()(const ConstNodePtr& a, const ConstNodePtr& b) const
+  {
+    return a->cost_estimate < b->cost_estimate; //note a and b reversed here
   }
 };
 
@@ -695,6 +704,11 @@ public:
     {
       for (const auto& assignment : agent)
       {
+        //std::cout << "id: " << assignment.request()->id() << std::endl;
+        if(assignment.request()->id() == 1001){
+          continue;
+        }
+        //std::cout << "finish time: " << assignment.state().finish_time().time_since_epoch().count()/1e9 << " earliest start time: " << assignment.request()->earliest_start_time().time_since_epoch().count()/1e9 << std::endl;
         cost +=
           rmf_traffic::time::to_seconds(
             assignment.state().finish_time() - assignment.request()->earliest_start_time());
@@ -761,8 +775,8 @@ public:
 
       if (node->unassigned_tasks.empty()){
         std::cout << "Returning " << std::endl;
-        return complete_assignments;
-        //return prune_assignments(complete_assignments);
+        //return complete_assignments;
+        return prune_assignments(complete_assignments);
       }
 
       std::vector<Request::SharedPtr> new_tasks;
@@ -806,21 +820,23 @@ public:
 
     for (const auto& u : node.unassigned_tasks)
     {
+      //std::cout << "unassigned task id: " << u.first << std::endl;
       // We subtract the invariant duration here because otherwise its
       // contribution to the cost estimate will be duplicated in the next section,
       // which could result in an overestimate.
       const rmf_traffic::Time variant_time =
           u.second.candidates.best_finish_time()
           - u.second.request->invariant_duration();
-      const double variant_value =
-        rmf_traffic::time::to_seconds(variant_time - time_now);
-
+      const double variant_value = rmf_traffic::time::to_seconds(variant_time - u.second.earliest_start_time);
+        //rmf_traffic::time::to_seconds(variant_time - time_now);
+      //std::cout << "variant val: " << variant_value << std::endl;
+      //std::cout << "actual cost: " << rmf_traffic::time::to_seconds(variant_time - u.second.earliest_start_time) << std::endl;
       const auto& range = u.second.candidates.best_candidates();
       for (auto it = range.begin; it != range.end; ++it)
       {
         const std::size_t candidate = it->second.candidate;
         if (variant_value < initial_queue_values[candidate])
-          initial_queue_values[candidate] = variant_value;
+          initial_queue_values[candidate] = variant_value; //start with nearest task
       }
     }
 
@@ -835,10 +851,11 @@ public:
         if (assignments.empty())
           value = 0.0;
         else
-          value =
-            rmf_traffic::time::to_seconds(
-              assignments.back().state().finish_time() - time_now);
+          value = 0.0;
+          //  rmf_traffic::time::to_seconds(
+          //    assignments.back().state().finish_time() - time_now);
       }
+      //std::cout << "queue value " << i << ": " << initial_queue_values[i] << std::endl;
     }
 
     InvariantHeuristicQueue queue(std::move(initial_queue_values));
@@ -854,6 +871,8 @@ public:
 
   double compute_f(const Node& n, const rmf_traffic::Time time_now)
   {
+    //std::cout << "g: " << compute_g(n) << std::endl;
+    //std::cout << "h: " << compute_h(n, time_now) << std::endl;
     return compute_g(n) + compute_h(n, time_now);
   }
 
@@ -936,13 +955,14 @@ public:
     const std::vector<StateConfig>& state_configs)
 
   {
+    //std::cout << "expanding task: " << u.first << std::endl;
     const auto& entry = it->second;
 
     if (parent->latest_time + segmentation_threshold < entry.wait_until)
     {
 
       // No need to assign task as timeline is not relevant
-      std::cout << "Timeline not relevant " << std::endl;
+      //std::cout << "Timeline not relevant " << std::endl;
       return nullptr;
     }
 
@@ -950,12 +970,14 @@ public:
 
     // option 2
     // add charging task if needed
+    if(!original){
     std::optional<State> add_charging_task = u.second.candidates.get_old_state(entry.candidate);
     if(add_charging_task)
     {
       const auto& state_config = state_configs[entry.candidate];
       State& old_state = *add_charging_task;
       auto charge_battery = make_charging_request(old_state.finish_time());
+      //std::cout << "old finish time: " << old_state.finish_time().time_since_epoch().count()/1e9 << std::endl;
       auto battery_estimate = charge_battery->estimate_finish(old_state, state_config);
       if (battery_estimate.has_value())
       {
@@ -982,11 +1004,14 @@ public:
     new_node->assigned_tasks[entry.candidate].push_back(
       Assignment{u.second.request, entry.state, entry.wait_until});
     }
+    }
 
     // Original
     // Assign the unassigned task
-    //new_node->assigned_tasks[entry.candidate].push_back(
-    //  Assignment{u.second.request, entry.state, entry.wait_until});
+    if(original){
+    new_node->assigned_tasks[entry.candidate].push_back(
+      Assignment{u.second.request, entry.state, entry.wait_until});
+    }
 
     // Erase the assigned task from unassigned tasks
     new_node->pop_unassigned(u.first);
@@ -996,7 +1021,7 @@ public:
     bool add_charger = false;
     for (auto& new_u : new_node->unassigned_tasks)
     {
-      std::cout << "Task: " << new_u.first << std::endl;
+      //std::cout << "Task: " << new_u.first << std::endl;
       const auto finish =
         new_u.second.request->estimate_finish(
           entry.state, state_config);
@@ -1009,6 +1034,7 @@ public:
           finish.value().wait_until());
         
         //option 2
+        //std::cout << "removing old state " << entry.candidate << std::endl;
         new_u.second.candidates.remove_old_state(entry.candidate);
       }
       else
@@ -1024,22 +1050,26 @@ public:
           break;   
         }*/
         //option 2
-        std::cout << "Initial Entry soc: " << entry.state.battery_soc() << std::endl;
+        //std::cout << "Initial Entry soc: " << entry.state.battery_soc() << std::endl;
+        if(!original){
          auto charge_battery = make_charging_request(entry.state.finish_time());
          auto battery_estimate = charge_battery->estimate_finish(entry.state, state_config);
          if (battery_estimate.has_value())
          {
+           //std::cout << "setting old state: " << entry.candidate << std::endl;
+           //std::cout << entry.state.finish_time().time_since_epoch().count()/1e9 << std::endl;
            new_u.second.candidates.set_old_state(entry.candidate, entry.state);
            auto new_finish =
              new_u.second.request->estimate_finish(
                battery_estimate.value().finish_state(),
                state_config);
            assert(new_finish.has_value());
-           std::cout << "Updated Entry soc: " << new_finish.value().finish_state().battery_soc() << std::endl;
+           //std::cout << "Updated Entry soc: " << new_finish.value().finish_state().battery_soc() << std::endl;
            new_u.second.candidates.update_candidate(
              entry.candidate,
              new_finish.value().finish_state(),
-             new_finish.value().wait_until());
+             battery_estimate.value().wait_until());
+             //new_finish.value().wait_until());
          }
          else
          {
@@ -1047,17 +1077,20 @@ public:
            std::cout << "explosion !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
            return nullptr;
          }
+        }
 
         //original
-        //add_charger = true;
-        //break;
+        if(original){
+        add_charger = true;
+        break;
+        }
       }
     }
 
     //original and option 1
-    /*if (add_charger)
+    if (add_charger)
     {
-      std::cout << "add charger " << std::endl;
+      //std::cout << "add charger " << std::endl;
       auto charge_battery = make_charging_request(entry.state.finish_time());
       auto battery_estimate = charge_battery->estimate_finish(entry.state, state_config);
       if (battery_estimate.has_value())
@@ -1081,7 +1114,7 @@ public:
           else
           {
             // We should stop expanding this node
-            std::cout << "Cannot complete task " << std::endl;
+            //std::cout << "Cannot complete task " << std::endl;
             return nullptr;
           }
         }
@@ -1090,10 +1123,10 @@ public:
       else
       {
         // Agent cannot make it back to the charger
-        std::cout << "Cannot reach charger " << std::endl;
+        //std::cout << "Cannot reach charger " << std::endl;
         return nullptr;
       }
-    }*/
+    }
 
     // Update the cost estimate for new_node
     new_node->cost_estimate = compute_f(*new_node, time_now);
@@ -1235,33 +1268,35 @@ public:
       parent->unassigned_tasks.size() + parent->assigned_tasks.size());
     for (const auto& u : parent->unassigned_tasks)
     {
-      std::cout << "assigning task: " << u.first << std::endl;
+      //std::cout << "assigning task: " << u.first << std::endl;
       const auto& range = u.second.candidates.best_candidates();
       for (auto it = range.begin; it!= range.end; it++)
       {
         auto new_node = expand_candidate(
           it, u, parent, &filter, time_now, state_configs);
         if(new_node){
-          std::cout << "new node: " << *new_node << std::endl;
+          //std::cout << "new node: " << *new_node << std::endl;
           new_nodes.push_back(std::move(new_node));
         } else {
-          std::cout << "invalid " << std::endl;
+          //std::cout << "invalid " << std::endl;
         }
       }
     }
 
     // Assign charging task to each robot
+    if(original){
     for (std::size_t i = 0; i < parent->assigned_tasks.size(); ++i)
     {
-      std::cout << "assigning charger to " << i << std::endl;
+      //std::cout << "assigning charger to " << i << std::endl;
       auto new_node = expand_charger(
         parent, i, initial_states, state_configs, time_now);
       if(new_node){
-        std::cout << "new node: " << *new_node << std::endl;
+        //std::cout << "new node: " << *new_node << std::endl;
         new_nodes.push_back(new_node);
       } else {
-        std::cout << "invalid " << std::endl;
+        //std::cout << "invalid " << std::endl;
       }
+    }
     }
 
     return new_nodes;
@@ -1278,6 +1313,7 @@ public:
         if (wait_time <= node.latest_time + segmentation_threshold){
           return false;
         }
+        //std::cout << rmf_traffic::time::to_seconds(node.latest_time - wait_time) << std::endl;
       }
     }
 
@@ -1296,31 +1332,43 @@ public:
       ConstNodePtr,
       std::vector<ConstNodePtr>,
       LowestCostEstimate>;
+    
+    using Set = std::multiset<ConstNodePtr, LowestCostEstimateSet>;
 
     PriorityQueue priority_queue;
     priority_queue.push(std::move(initial_node));
+    Set set;
+    //set.insert(std::move(initial_node));
 
     Filter filter{config->filter_type(), num_tasks};
     ConstNodePtr top = nullptr;
 
     while (!priority_queue.empty() && !(interrupter && interrupter()))
+    //while(!set.empty() && !(interrupter && interrupter()))
     {
-      std::cout << "iteration....." << std::endl;
+      /*std::cout << "iteration....." << std::endl;
       PriorityQueue pq_copy = priority_queue;
       while(!pq_copy.empty()){
         std::cout << *(pq_copy.top()) << std::endl;
         pq_copy.pop();
       }
+      auto it = set.begin();
+      while(it != set.end()){
+        std::cout << *(*it) << std::endl;
+        ++it;
+      }*/
 
       top = priority_queue.top();
+      //top = *set.begin();
 
       // Pop the top of the priority queue
       priority_queue.pop();
+      //set.erase(set.begin());
 
       // Check if unassigned tasks is empty -> solution found
       if (finished(*top))
       {
-        std::cout << *top << std::endl;
+        std::cout << "finished: " << *top << std::endl;
         return top;
       }
 
@@ -1332,6 +1380,7 @@ public:
       for (const auto&n : new_nodes)
       {
         priority_queue.push(n);
+        //set.insert(n);
       }
       
     }
