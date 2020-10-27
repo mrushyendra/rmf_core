@@ -465,8 +465,8 @@ SCENARIO("Grid World")
 
   std::vector<int> test_unoptimal_waypoints2 {13, 2, 13, 2};
 
-  std::vector<std::vector<std::tuple<int,int,int>>> tests {test4};//{test1, test2, test3, test4};
-  std::vector<std::vector<int>> test_waypoints {test4_waypoints};//{test1_waypoints, test2_waypoints, test3_waypoints, test4_waypoints};
+  std::vector<std::vector<std::tuple<int,int,int>>> tests {test1, test2, test3, test4};
+  std::vector<std::vector<int>> test_waypoints {test1_waypoints, test2_waypoints, test3_waypoints, test4_waypoints};
 
   run_tests(tests, test_waypoints, battery_system, planner, motion_sink, device_sink,drain_battery);
 

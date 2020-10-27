@@ -781,6 +781,7 @@ public:
 
       std::vector<Request::SharedPtr> new_tasks;
       std::cout << "unassigned tasks size: " << node->unassigned_tasks.size() << std::endl;
+      std::cout << "time now: " << time_now.time_since_epoch().count()/1e9 << std::endl;
       for (const auto& u : node->unassigned_tasks)
         new_tasks.push_back(u.second.request);
 
@@ -1284,7 +1285,7 @@ public:
     }
 
     // Assign charging task to each robot
-    if(original){
+    //if(original){
     for (std::size_t i = 0; i < parent->assigned_tasks.size(); ++i)
     {
       //std::cout << "assigning charger to " << i << std::endl;
@@ -1297,7 +1298,7 @@ public:
         //std::cout << "invalid " << std::endl;
       }
     }
-    }
+    //}
 
     return new_nodes;
   }
@@ -1313,7 +1314,7 @@ public:
         if (wait_time <= node.latest_time + segmentation_threshold){
           return false;
         }
-        //std::cout << rmf_traffic::time::to_seconds(node.latest_time - wait_time) << std::endl;
+        //std::cout << rmf_traffic::time::to_seconds(wait_time - node.latest_time) << std::endl;
       }
     }
 
