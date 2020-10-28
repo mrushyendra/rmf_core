@@ -153,9 +153,8 @@ rmf_utils::optional<rmf_task::Estimate> Delivery::estimate_finish(
       battery_soc = battery_soc - dSOC_motion - dSOC_device;
     }
 
-    if (battery_soc <= state_config.threshold_soc()){
+    if (battery_soc <= state_config.threshold_soc())
       return rmf_utils::nullopt;
-    }
   }
 
   const rmf_traffic::Time ideal_start = _pimpl->_start_time - variant_duration;
@@ -170,9 +169,8 @@ rmf_utils::optional<rmf_task::Estimate> Delivery::estimate_finish(
   if (_pimpl->_drain_battery)
   {
     battery_soc -= _pimpl->_invariant_battery_drain;
-    if (battery_soc <= state_config.threshold_soc()){
+    if (battery_soc <= state_config.threshold_soc())
       return rmf_utils::nullopt;
-    }
 
     // Check if the robot has enough charge to head back to nearest charger
     double retreat_battery_drain = 0.0;
@@ -199,9 +197,8 @@ rmf_utils::optional<rmf_task::Estimate> Delivery::estimate_finish(
       retreat_battery_drain = dSOC_motion + dSOC_device;
     }
 
-    if (battery_soc - retreat_battery_drain <= state_config.threshold_soc()){
+    if (battery_soc - retreat_battery_drain <= state_config.threshold_soc())
       return rmf_utils::nullopt;
-    }
     
     state.battery_soc(battery_soc);
   }

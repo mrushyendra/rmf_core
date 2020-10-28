@@ -467,7 +467,7 @@ SCENARIO("Grid World")
 
   std::vector<int> test_unoptimal_waypoints2 {13, 2, 13, 2};
 
-  bool test_optimal = false; // set to true if you want to invoke the optimal solver
+  bool test_optimal = true; // set to true if you want to invoke the optimal solver
 
   // Hardcoded tests
   //std::vector<std::vector<std::tuple<int,int,int>>> tests {test1, test2, test3, test4};
@@ -478,15 +478,6 @@ SCENARIO("Grid World")
   std::pair<std::vector<std::vector<std::tuple<int,int,int>>>,
     std::vector<std::vector<int>>> auto_gen_testcases =
     generate_testcases(15, {{4,0},{3,50000},{4,70000}}, 30);
-
-  for(size_t num = 0; num < auto_gen_testcases.first.size(); ++num){
-    for(size_t i = 0; i < auto_gen_testcases.first[num].size(); ++i){
-      std::cout << "{" << std::get<0>(auto_gen_testcases.first[num][i])
-        << "," << std::get<1>(auto_gen_testcases.first[num][i])
-        << "," << std::get<2>(auto_gen_testcases.first[num][i]) << "}" << std::endl;
-    }
-    std::cout << std::endl;
-  }
 
   run_tests(auto_gen_testcases.first, auto_gen_testcases.second, battery_system,
     planner, motion_sink, device_sink, drain_battery, test_optimal);
