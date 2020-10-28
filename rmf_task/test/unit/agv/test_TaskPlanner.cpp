@@ -47,17 +47,18 @@
 using Assignments = std::vector<std::vector<rmf_task::agv::TaskPlanner::Assignment>>;
 
 std::pair<std::vector<std::vector<std::tuple<int,int,int>>>, std::vector<std::vector<int>>>
-  generate_testcases(size_t max, size_t num_tasks, size_t num_testcases);
+  generate_testcases(size_t max, std::vector<std::vector<size_t>> test_profile, size_t num_testcases);
 std::pair<std::vector<std::tuple<int,int,int>>, std::vector<int>>
-  generate_testcase(size_t max, size_t num_tasks, std::mt19937& eng);
+  generate_testcase(size_t max, std::vector<std::vector<size_t>> test_profile, std::mt19937& eng);
 void run_tests(std::vector<std::vector<std::tuple<int,int,int>>> tests,
   std::vector<std::vector<int>> test_waypoints,
   const rmf_battery::agv::BatterySystem& battery_system,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
   std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
-  bool drain_battery);
-std::pair<Assignments, double> compute_optimal(const std::vector<std::tuple<int,int,int>>& request_data,
+  bool drain_battery,
+  bool optimal=true);
+std::pair<Assignments, double> compute_assignments(const std::vector<std::tuple<int,int,int>>& request_data,
   size_t initial_pt,
   size_t initial_pt2,
   size_t charging_pt,
@@ -66,7 +67,8 @@ std::pair<Assignments, double> compute_optimal(const std::vector<std::tuple<int,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
   std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
-  bool drain_battery);
+  bool drain_battery,
+  bool optimal=true);
 
 //==============================================================================
 inline void display_solution(
@@ -465,42 +467,60 @@ SCENARIO("Grid World")
 
   std::vector<int> test_unoptimal_waypoints2 {13, 2, 13, 2};
 
-  std::vector<std::vector<std::tuple<int,int,int>>> tests {test1, test2, test3, test4};
-  std::vector<std::vector<int>> test_waypoints {test1_waypoints, test2_waypoints, test3_waypoints, test4_waypoints};
+  bool test_optimal = false; // set to true if you want to invoke the optimal solver
 
-  run_tests(tests, test_waypoints, battery_system, planner, motion_sink, device_sink,drain_battery);
+  // Hardcoded tests
+  //std::vector<std::vector<std::tuple<int,int,int>>> tests {test1, test2, test3, test4};
+  //std::vector<std::vector<int>> test_waypoints {test1_waypoints, test2_waypoints, test3_waypoints, test4_waypoints};
+  //run_tests(tests, test_waypoints, battery_system, planner, motion_sink, device_sink, drain_battery, test_optimal);
 
-  std::pair<std::vector<std::vector<std::tuple<int,int,int>>>, std::vector<std::vector<int>>> auto_gen_testcases = generate_testcases(15, 7, 20);
-  /*for(int num = 0; num < auto_gen_testcases.first.size(); ++num){
-    for(int i = 0; i < auto_gen_testcases.first[num].size(); ++i){
-      std::cout << "{" << std::get<0>(auto_gen_testcases.first[num][i]) << "," << std::get<1>(auto_gen_testcases.first[num][i])
+  // Randomly generated tests
+  std::pair<std::vector<std::vector<std::tuple<int,int,int>>>,
+    std::vector<std::vector<int>>> auto_gen_testcases =
+    generate_testcases(15, {{4,0},{3,50000},{4,70000}}, 30);
+
+  for(size_t num = 0; num < auto_gen_testcases.first.size(); ++num){
+    for(size_t i = 0; i < auto_gen_testcases.first[num].size(); ++i){
+      std::cout << "{" << std::get<0>(auto_gen_testcases.first[num][i])
+        << "," << std::get<1>(auto_gen_testcases.first[num][i])
         << "," << std::get<2>(auto_gen_testcases.first[num][i]) << "}" << std::endl;
     }
     std::cout << std::endl;
-  }*/
-
-  //run_tests(auto_gen_testcases.first, auto_gen_testcases.second, battery_system, planner, motion_sink, device_sink,drain_battery);
-}
-
-std::pair<std::vector<std::tuple<int,int,int>>, std::vector<int>> generate_testcase(size_t max, size_t num_tasks, std::mt19937& eng){
-  // a distribution that takes randomness and produces values in specified range
-  std::uniform_int_distribution<> dist(1,max);
-  std::vector<std::tuple<int,int,int>> tasks;
-  for(size_t i = 0; i < num_tasks; ++i){
-    int from = dist(eng);
-    int to = dist(eng);
-    while(to == from){
-      to = dist(eng);
-    }
-    std::tuple<int,int,int> task{from, to, 0};
-    tasks.push_back(task);
   }
 
-  std::vector<int> waypoints {13, 2, 13, 2}; //hardcode
+  run_tests(auto_gen_testcases.first, auto_gen_testcases.second, battery_system,
+    planner, motion_sink, device_sink, drain_battery, test_optimal);
+}
+
+// Randomly generates a testcase, where `max` is the number of waypoints on the map,
+// and test_profile is a vector specifying the number of tasks at each time
+// Returns a pair consisting of a vector of delivery tasks and a list of charger waypoints
+std::pair<std::vector<std::tuple<int,int,int>>, std::vector<int>> generate_testcase(
+  size_t max, std::vector<std::vector<size_t>> test_profile, std::mt19937& eng)
+{
+  std::uniform_int_distribution<> dist(1,max);
+
+  std::vector<std::tuple<int,int,int>> tasks; // tuple of from, to locations and time
+  for(size_t i = 0; i < test_profile.size(); ++i){
+    for(size_t j = 0; j < test_profile[i][0]; ++j){
+      int from = dist(eng);
+      int to = dist(eng);
+      while(to == from){
+        to = dist(eng);
+      }
+      int time = test_profile[i][1];
+      std::tuple<int,int,int> task{from, to, time};
+      tasks.push_back(task);
+    }
+  }
+
+  std::vector<int> waypoints {13, 2, 13, 2}; // hardcoded for now
   return make_pair(tasks, waypoints);
 }
 
-std::pair<std::vector<std::vector<std::tuple<int,int,int>>>, std::vector<std::vector<int>>> generate_testcases(size_t max, size_t num_tasks, size_t num_testcases){
+std::pair<std::vector<std::vector<std::tuple<int,int,int>>>,
+  std::vector<std::vector<int>>> generate_testcases(
+  size_t max, std::vector<std::vector<size_t>> num_tasks, size_t num_testcases){
   // create source of randomness, and initialize it with non-deterministic seed
   std::random_device r;
   std::seed_seq seed{r(), r(), r(), r(), r(), r(), r(), r()};
@@ -523,16 +543,17 @@ void run_tests(std::vector<std::vector<std::tuple<int,int,int>>> tests,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
   std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
-  bool drain_battery)
+  bool drain_battery,
+  bool optimal)
 {
   std::vector<std::pair<Assignments, double>> optimals;
 
   for(size_t i = 0; i < tests.size(); ++i){
     auto& waypoints = test_waypoints[i];
     auto& test = tests[i];
-    std::pair<Assignments, double> optimal_assignment = compute_optimal(test, waypoints[0],
-      waypoints[1], waypoints[2], waypoints[3], battery_system, planner,
-      motion_sink, device_sink, drain_battery);
+    std::pair<Assignments, double> optimal_assignment = compute_assignments(test, waypoints[0],
+        waypoints[1], waypoints[2], waypoints[3], battery_system, planner,
+        motion_sink, device_sink, drain_battery, optimal);
     optimals.push_back(std::move(optimal_assignment));    
   }
 
@@ -551,7 +572,7 @@ void run_tests(std::vector<std::vector<std::tuple<int,int,int>>> tests,
 
 }
 
-std::pair<Assignments, double> compute_optimal(const std::vector<std::tuple<int,int,int>>& request_data,
+std::pair<Assignments, double> compute_assignments(const std::vector<std::tuple<int,int,int>>& request_data,
   size_t initial_pt,
   size_t initial_pt2,
   size_t charging_pt,
@@ -560,7 +581,8 @@ std::pair<Assignments, double> compute_optimal(const std::vector<std::tuple<int,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
   std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
-  bool drain_battery)
+  bool drain_battery,
+  bool optimal)
 {
   const auto now = std::chrono::steady_clock::now();
   const double default_orientation = 0.0;
@@ -602,9 +624,18 @@ std::pair<Assignments, double> compute_optimal(const std::vector<std::tuple<int,
       planner);
   rmf_task::agv::TaskPlanner task_planner(task_config);
 
-  const auto optimal_assignments = task_planner.optimal_plan(
-    now, initial_states, state_configs, requests, nullptr);
-  const double optimal_cost = task_planner.compute_cost(optimal_assignments);
-
-  return(make_pair(optimal_assignments,optimal_cost));
+  if(optimal)
+  {
+    const auto assignments = task_planner.optimal_plan(
+      now, initial_states, state_configs, requests, nullptr);
+    const double cost = task_planner.compute_cost(assignments);
+    return(std::make_pair(assignments, cost));
+  }
+  else
+  {
+    const auto assignments = task_planner.greedy_plan(
+      now, initial_states, state_configs, requests);
+    const double cost = task_planner.compute_cost(assignments);
+    return(std::make_pair(assignments, cost));
+  }
 }
