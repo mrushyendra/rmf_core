@@ -450,23 +450,6 @@ SCENARIO("Grid World")
 
   std::vector<int> test4_waypoints {13, 2, 13, 2};
 
-  std::vector<std::tuple<int,int,int>> test_unoptimal {
-    {15,11,0},
-    {5,8,0},
-    {3,14,0},
-    {2,8,0},
-    {3,15,0}};
-
-  std::vector<int> test_unoptimal_waypoints {13, 2, 13, 2};
-
-  std::vector<std::tuple<int,int,int>> test_unoptimal2 {
-    {7,3,0},
-    {10,1,0},
-    {6,11,0},
-    {11,8,0}};
-
-  std::vector<int> test_unoptimal_waypoints2 {13, 2, 13, 2};
-
   bool test_optimal = true; // set to true if you want to invoke the optimal solver
 
   // Hardcoded tests
@@ -537,29 +520,29 @@ void run_tests(std::vector<std::vector<std::tuple<int,int,int>>> tests,
   bool drain_battery,
   bool optimal)
 {
-  std::vector<std::pair<Assignments, double>> optimals;
+  std::vector<std::pair<Assignments, double>> assignments;
 
   for(size_t i = 0; i < tests.size(); ++i){
     auto& waypoints = test_waypoints[i];
     auto& test = tests[i];
-    std::pair<Assignments, double> optimal_assignment = compute_assignments(test, waypoints[0],
+    std::pair<Assignments, double> assignment = compute_assignments(test, waypoints[0],
         waypoints[1], waypoints[2], waypoints[3], battery_system, planner,
         motion_sink, device_sink, drain_battery, optimal);
-    optimals.push_back(std::move(optimal_assignment));    
+    assignments.push_back(std::move(assignment));
   }
 
-  for(size_t i = 0; i < optimals.size(); ++i){
+  for(size_t i = 0; i < assignments.size(); ++i){
     std::cout << "i: " << i << std::endl;
-    display_solution("Optimal", optimals[i].first, optimals[i].second);
+    display_solution("Result ", assignments[i].first, assignments[i].second);
   }
 
   double avg = 0;
-  for(size_t i = 0; i < optimals.size(); ++i){
-    std::cout << optimals[i].second << " , ";
-    avg += optimals[i].second;
+  for(size_t i = 0; i < assignments.size(); ++i){
+    std::cout << assignments[i].second << " , ";
+    avg += assignments[i].second;
   }
   std::cout << std::endl;
-  std::cout << "Average cost: " << avg/(double)optimals.size() << std::endl;
+  std::cout << "Average cost: " << avg/(double)assignments.size() << std::endl;
 
 }
 

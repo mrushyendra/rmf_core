@@ -35,7 +35,7 @@
 namespace rmf_task {
 namespace agv {
 
-bool original = false; // Set to 'false' to use modified complete_solve algorithm
+bool original = true; // Set to 'false' to use modified complete_solve algorithm
 
 //==============================================================================
 class TaskPlanner::Configuration::Implementation
@@ -355,10 +355,12 @@ Candidates Candidates::make(
         auto new_finish = request.estimate_finish(
           battery_estimate.value().finish_state(), state_config);
         assert(new_finish.has_value());
+        auto wait_until_time = original ? new_finish.value().wait_until() :
+          battery_estimate.value().wait_until();
         initial_map.insert(
           {new_finish.value().finish_state().finish_time(),
           Entry{i, new_finish.value().finish_state(),
-            battery_estimate.value().wait_until()}});//new_finish.value().wait_until()}});
+            wait_until_time}});
       }
       else
       {
@@ -1243,13 +1245,30 @@ public:
     while (!finished(*node))
     {
       ConstNodePtr next_node = nullptr;
+
+      // Manually try assigning charging task to each robot (for implicit charging method)
+      if(!original)
+      {
+        for (std::size_t i = 0; i < node->assigned_tasks.size(); ++i)
+        {
+          auto new_node = expand_charger(
+            node, i, initial_states, state_configs, time_now);
+          if(!next_node || (new_node && new_node->cost_estimate < next_node->cost_estimate)){
+            next_node = std::move(new_node);
+          }
+        }
+      }
+
       for (const auto& u : node->unassigned_tasks)
       {
         const auto& range = u.second.candidates.best_candidates();
         for (auto it = range.begin; it != range.end; ++it)
         {
-          if (auto n = expand_candidate(
-            it, u, node, nullptr, time_now, state_configs))
+          auto n = original ? expand_candidate(it, u, node,
+              nullptr, time_now, state_configs) :
+            expand_candidate_new(it, u, node,
+              nullptr, time_now, state_configs);
+          if (n)
           {
             if (!next_node || (n->cost_estimate < next_node->cost_estimate))
               {
@@ -1276,7 +1295,11 @@ public:
                   time_now);
                 if (new_charge_node)
                 {
-                  next_node = std::move(new_charge_node);
+                  if (!next_node ||
+                    (new_charge_node->cost_estimate < next_node->cost_estimate))
+                  {
+                    next_node = std::move(new_charge_node);
+                  }
                   break;
                 }
               }
