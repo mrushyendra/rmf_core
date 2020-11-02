@@ -500,7 +500,7 @@ struct LowestCostEstimateSet
 };
 
 //==============================================================================
-class InvariantHeuristicQueue
+/*class InvariantHeuristicQueue
 {
 public:
 
@@ -553,6 +553,63 @@ public:
 
 private:
   std::vector<std::vector<double>> _stacks;
+};*/
+
+class InvariantHeuristicQueue
+{
+public:
+
+  InvariantHeuristicQueue(std::vector<double> initial_values)
+  {
+    assert(!initial_values.empty());
+    std::sort(initial_values.begin(), initial_values.end());
+
+    for (const auto value : initial_values)
+      _stacks.push_back({{value,-1}});
+  }
+
+  void add(const double earliest_start_time_secs, const double earliest_finish_time)
+  {
+    double prev_end_value = _stacks[0].back().first;
+    //double new_end_value = std::max(prev_end_value, earliest_start_time_secs) + (earliest_finish_time - earliest_start_time_secs);
+    double new_end_value = prev_end_value + (earliest_finish_time - earliest_start_time_secs);
+    _stacks[0].push_back(std::make_pair(new_end_value, earliest_start_time_secs));
+
+    // Find the largest stack that is still smaller than the current front
+    const auto next_it = _stacks.begin() + 1;
+    auto end_it = next_it;
+    for (; end_it != _stacks.end(); ++end_it)
+    {
+      if (new_end_value <= end_it->back().first)
+        break;
+    }
+
+    if (next_it != end_it)
+    {
+      // Rotate the vector elements to move the front stack to its new place
+      // in the order
+      std::rotate(_stacks.begin(), next_it, end_it);
+    }
+  }
+
+  double compute_cost() const
+  {
+    double total_cost = 0.0;
+    for (const auto& stack : _stacks)
+    {
+      // NOTE: We start iterating from i=1 because i=0 represents a component of
+      // the cost that is already accounted for by g(n) and the variant
+      // component of h(n)
+      for (std::size_t i=1; i < stack.size(); ++i){
+        total_cost += std::max(0.0,(stack[i].first - stack[i].second));
+      }
+    }
+
+    return total_cost;
+  }
+
+private:
+  std::vector<std::vector<std::pair<double,double>>> _stacks;
 };
 
 // ============================================================================
@@ -695,7 +752,7 @@ bool Filter::ignore(const Node& node)
 }
 
 const rmf_traffic::Duration segmentation_threshold =
-    rmf_traffic::time::from_seconds(1.0);
+    rmf_traffic::time::from_seconds(1.0);//1000000.0);
 
 } // anonymous namespace
 
@@ -827,11 +884,11 @@ public:
     return compute_g(node.assigned_tasks);
   }
 
-  double compute_h(const Node& node, const rmf_traffic::Time time_now)
+  /*double compute_h(const Node& node, const rmf_traffic::Time time_now)
   {
     std::vector<double> initial_queue_values;
     initial_queue_values.resize(
-          node.assigned_tasks.size(), std::numeric_limits<double>::infinity());
+          node.assigned_tasks.size(), 0.0);//std::numeric_limits<double>::infinity());
 
     for (const auto& u : node.unassigned_tasks)
     {
@@ -880,14 +937,62 @@ public:
     // here. The InvariantHeuristicQueue expects the invariant costs to be passed
     // to it in order of smallest to largest. If that assumption is not met, then
     // the final cost that's calculated may be invalid.
-    for (const auto& u : node.unassigned_invariants)
+    for (const auto& u : node.unassigned_invariants){
       queue.add(u.invariant_cost);
+    }
+
+    return queue.compute_cost();
+  }*/
+
+  double compute_h(const Node& node, const rmf_traffic::Time time_now)
+  {
+    std::vector<double> initial_queue_values;
+    initial_queue_values.resize(
+          node.assigned_tasks.size(), 0.0);
+
+    for(size_t i = 0; i < node.assigned_tasks.size(); ++i)
+    {
+      if (node.assigned_tasks[i].empty())
+      {
+        initial_queue_values[i] = time_now.time_since_epoch().count()/1e9;
+      }
+      else
+      {
+        initial_queue_values[i] = node.assigned_tasks[i].back().state().finish_time().time_since_epoch().count()/1e9;
+      }
+    }
+
+    InvariantHeuristicQueue queue(std::move(initial_queue_values));
+    // NOTE: It is crucial that we use the ordered set of unassigned_invariants
+    // here. The InvariantHeuristicQueue expects the invariant costs to be passed
+    // to it in order of smallest to largest. If that assumption is not met, then
+    // the final cost that's calculated may be invalid.
+
+    std::vector<std::pair<double,double>> unassigned_task_vals;
+    for (const auto& u : node.unassigned_tasks)
+    {
+      double earliest_start_time_secs =  u.second.earliest_start_time.time_since_epoch().count()/1e9;
+      double earliest_finish_time = earliest_start_time_secs + rmf_traffic::time::to_seconds(u.second.request->invariant_duration());
+      unassigned_task_vals.push_back({earliest_start_time_secs,earliest_finish_time});
+    }
+    std::sort(unassigned_task_vals.begin(), unassigned_task_vals.end(), [](const std::pair<double,double>& a, const std::pair<double,double>& b){
+      return a.second < b.second;
+    });
+
+    for(auto& val : unassigned_task_vals)
+    {
+      queue.add(val.first, val.second);
+    }
 
     return queue.compute_cost();
   }
 
+  //change to start_time+invariant_time -> sort by smallest -> cost equals finishing time - start_time for each
+  //to determine finishing time, use node latest time for each candidate
   double compute_f(const Node& n, const rmf_traffic::Time time_now)
   {
+    //std::cout << "g(n): " << compute_g(n) << std::endl;
+    //std::cout << "h(n): " << compute_h(n, time_now) << std::endl;
     return compute_g(n) + compute_h(n, time_now);
   }
 
@@ -1342,7 +1447,7 @@ public:
     }
 
     // Assign charging task to each robot
-    if(original){
+    //if(original){
       for (std::size_t i = 0; i < parent->assigned_tasks.size(); ++i)
       {
         auto new_node = expand_charger(
@@ -1351,7 +1456,7 @@ public:
           new_nodes.push_back(new_node);
         }
       }
-    }
+    //}
 
     return new_nodes;
   }
@@ -1395,8 +1500,9 @@ public:
 
     while (!priority_queue.empty() && !(interrupter && interrupter()))
     {
-      /*std::cout << "iteration....." << std::endl;
-      PriorityQueue pq_copy = priority_queue;
+      std::cout << "iteration....." << std::endl;
+      std::cout << *priority_queue.top() << std::endl;
+      /*PriorityQueue pq_copy = priority_queue;
       while(!pq_copy.empty()){
         std::cout << *(pq_copy.top()) << std::endl;
         pq_copy.pop();

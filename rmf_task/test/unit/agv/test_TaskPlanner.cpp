@@ -453,17 +453,17 @@ SCENARIO("Grid World")
   bool test_optimal = true; // set to true if you want to invoke the optimal solver
 
   // Hardcoded tests
-  //std::vector<std::vector<std::tuple<int,int,int>>> tests {test1, test2, test3, test4};
-  //std::vector<std::vector<int>> test_waypoints {test1_waypoints, test2_waypoints, test3_waypoints, test4_waypoints};
-  //run_tests(tests, test_waypoints, battery_system, planner, motion_sink, device_sink, drain_battery, test_optimal);
+  std::vector<std::vector<std::tuple<int,int,int>>> tests {test4};//{test1, test2, test3, test4};
+  std::vector<std::vector<int>> test_waypoints {test4_waypoints};//{test1_waypoints, test2_waypoints, test3_waypoints, test4_waypoints};
+  run_tests(tests, test_waypoints, battery_system, planner, motion_sink, device_sink, drain_battery, test_optimal);
 
   // Randomly generated tests
   std::pair<std::vector<std::vector<std::tuple<int,int,int>>>,
     std::vector<std::vector<int>>> auto_gen_testcases =
     generate_testcases(15, {{4,0},{3,50000},{4,70000}}, 30);
 
-  run_tests(auto_gen_testcases.first, auto_gen_testcases.second, battery_system,
-    planner, motion_sink, device_sink, drain_battery, test_optimal);
+  //run_tests(auto_gen_testcases.first, auto_gen_testcases.second, battery_system,
+  //  planner, motion_sink, device_sink, drain_battery, test_optimal);
 }
 
 // Randomly generates a testcase, where `max` is the number of waypoints on the map,
