@@ -484,7 +484,7 @@ private:
 
   struct TaskTable
   {
-    std::unordered_map<std::size_t, std::unique_ptr<AgentTable>> task;
+    std::unordered_map<std::string, std::unique_ptr<AgentTable>> task;
   };
   
   struct AssignmentHash
@@ -505,7 +505,7 @@ private:
         {
           // We add 1 to the task_id to differentiate between task_id == 0 and
           // a task being unassigned.
-          const std::size_t id = s.request()->id() + 1;
+          const std::size_t id = std::hash<std::string>()(s.request()->id());
           output += id << (_shift * (count++));
         }
       }
@@ -535,7 +535,9 @@ private:
         for (std::size_t j=0; j < a.size(); ++j)
         {
           if (a[j].request()->id() != b[j].request()->id())
+          {
             return false;
+          }
         }
       }
 
@@ -687,7 +689,6 @@ public:
         for (const auto& a : new_assignments)
         {
           all_assignments.push_back(a);
-          // all_assignments.back().task_id = task_id_map.at(a.task_id);
         }
       }
 
@@ -797,12 +798,14 @@ public:
 
     // TODO(YV): Come up with a better solution for charge_battery_request
     auto charge_battery = make_charging_request(time_now);
-    for (const auto& request : requests)
+    for(size_t i = 0; i < requests.size(); ++i)
+    {
       initial_node->unassigned_tasks.insert(
         {
-          request->id(),
-          PendingTask(initial_states, state_configs, request, charge_battery)
+          i,
+          PendingTask(initial_states, state_configs, requests[i], charge_battery)
         });
+    }
 
     initial_node->cost_estimate = compute_f(*initial_node, time_now);
 
