@@ -35,7 +35,13 @@
 namespace rmf_task {
 namespace agv {
 
-bool original = true; // Set to 'false' to use modified complete_solve algorithm
+// Switch between old and new versions for testing
+#define ORIGINAL // Uncomment to use modified complete_solve algorithm
+//#define NEW_HN // use updated heuristic function h(n)
+//#define EXCLUDE_CHARGING_COST // exclude any charging tasks from cost g(n)
+//#define VARIANT_VAL_FIX // get variant value from earliest start time, not from time_now
+//#define NO_SEGMENTATION_THRESHOLD // increases segmentation_threshold to arbitrarily large value
+//#define NO_EXPAND_CHARGE // does not call expand_charge with new implementation
 
 //==============================================================================
 class TaskPlanner::Configuration::Implementation
@@ -355,8 +361,11 @@ Candidates Candidates::make(
         auto new_finish = request.estimate_finish(
           battery_estimate.value().finish_state(), state_config);
         assert(new_finish.has_value());
-        auto wait_until_time = original ? new_finish.value().wait_until() :
-          battery_estimate.value().wait_until();
+        #ifdef ORIGINAL
+          auto wait_until_time = new_finish.value().wait_until();
+        #else
+          auto wait_until_time = battery_estimate.value().wait_until();
+        #endif
         initial_map.insert(
           {new_finish.value().finish_state().finish_time(),
           Entry{i, new_finish.value().finish_state(),
@@ -500,7 +509,9 @@ struct LowestCostEstimateSet
 };
 
 //==============================================================================
-/*class InvariantHeuristicQueue
+#ifndef NEW_HN
+
+class InvariantHeuristicQueue
 {
 public:
 
@@ -553,7 +564,9 @@ public:
 
 private:
   std::vector<std::vector<double>> _stacks;
-};*/
+};
+
+#else
 
 class InvariantHeuristicQueue
 {
@@ -611,6 +624,8 @@ public:
 private:
   std::vector<std::vector<std::pair<double,double>>> _stacks;
 };
+
+#endif
 
 // ============================================================================
 class Filter
@@ -752,7 +767,11 @@ bool Filter::ignore(const Node& node)
 }
 
 const rmf_traffic::Duration segmentation_threshold =
-    rmf_traffic::time::from_seconds(1.0);//1000000.0);
+#ifdef NO_SEGMENTATION_THRESHOLD
+    rmf_traffic::time::from_seconds(1000000.0);
+#else
+    rmf_traffic::time::from_seconds(1.0);
+#endif
 
 } // anonymous namespace
 
@@ -781,9 +800,11 @@ public:
     {
       for (const auto& assignment : agent)
       {
+        #ifdef EXCLUDE_CHARGING_COST
         if(!assignment.include_in_cost()){
           continue;
         }
+        #endif
         cost +=
           rmf_traffic::time::to_seconds(
             assignment.state().finish_time() - assignment.request()->earliest_start_time());
@@ -884,7 +905,8 @@ public:
     return compute_g(node.assigned_tasks);
   }
 
-  /*double compute_h(const Node& node, const rmf_traffic::Time time_now)
+  #ifndef NEW_HN
+  double compute_h(const Node& node, const rmf_traffic::Time time_now)
   {
     std::vector<double> initial_queue_values;
     initial_queue_values.resize(
@@ -902,8 +924,14 @@ public:
       // Technically speaking, not the variant value because it uses earliest_start_time
       // instead of deployment_time. Works better because it more closely approximates how
       // g(n) is computed
+      #ifdef VARIANT_VAL_FIX
       const double variant_value =
         rmf_traffic::time::to_seconds(variant_time - u.second.earliest_start_time);
+      #else
+      const double variant_value =
+        rmf_traffic::time::to_seconds(variant_time - time_now); 
+      #endif
+
       const auto& range = u.second.candidates.best_candidates();
       for (auto it = range.begin; it != range.end; ++it)
       {
@@ -942,7 +970,9 @@ public:
     }
 
     return queue.compute_cost();
-  }*/
+  }
+
+  #else
 
   double compute_h(const Node& node, const rmf_traffic::Time time_now)
   {
@@ -986,6 +1016,8 @@ public:
 
     return queue.compute_cost();
   }
+
+  #endif
 
   //change to start_time+invariant_time -> sort by smallest -> cost equals finishing time - start_time for each
   //to determine finishing time, use node latest time for each candidate
@@ -1352,27 +1384,30 @@ public:
       ConstNodePtr next_node = nullptr;
 
       // Manually try assigning charging task to each robot (for implicit charging method)
-      if(!original)
+      #ifndef ORIGINAL
+      for (std::size_t i = 0; i < node->assigned_tasks.size(); ++i)
       {
-        for (std::size_t i = 0; i < node->assigned_tasks.size(); ++i)
-        {
-          auto new_node = expand_charger(
-            node, i, initial_states, state_configs, time_now);
-          if(!next_node || (new_node && new_node->cost_estimate < next_node->cost_estimate)){
-            next_node = std::move(new_node);
-          }
+        auto new_node = expand_charger(
+          node, i, initial_states, state_configs, time_now);
+        if(!next_node || (new_node && new_node->cost_estimate < next_node->cost_estimate)){
+          next_node = std::move(new_node);
         }
       }
+      #endif
 
       for (const auto& u : node->unassigned_tasks)
       {
         const auto& range = u.second.candidates.best_candidates();
         for (auto it = range.begin; it != range.end; ++it)
         {
-          auto n = original ? expand_candidate(it, u, node,
-              nullptr, time_now, state_configs) :
-            expand_candidate_new(it, u, node,
+          #ifdef ORIGINAL
+          auto n = expand_candidate(it, u, node,
               nullptr, time_now, state_configs);
+          #else
+          auto n = expand_candidate_new(it, u, node,
+              nullptr, time_now, state_configs);
+          #endif
+
           if (n)
           {
             if (!next_node || (n->cost_estimate < next_node->cost_estimate))
@@ -1435,10 +1470,13 @@ public:
       const auto& range = u.second.candidates.best_candidates();
       for (auto it = range.begin; it != range.end; it++)
       {
-        auto new_node = original ? expand_candidate(
-            it, u, parent, &filter, time_now, state_configs) :
-          expand_candidate_new(it, u, parent, &filter, time_now,
-            state_configs);
+        #ifdef ORIGINAL
+        auto new_node = expand_candidate(
+          it, u, parent, &filter, time_now, state_configs);
+        #else
+        auto new_node = expand_candidate_new(it, u, parent, &filter, time_now,
+          state_configs);
+        #endif
 
         if (new_node) {
           new_nodes.push_back(std::move(new_node));
@@ -1447,7 +1485,7 @@ public:
     }
 
     // Assign charging task to each robot
-    //if(original){
+    #ifndef NO_EXPAND_CHARGE
       for (std::size_t i = 0; i < parent->assigned_tasks.size(); ++i)
       {
         auto new_node = expand_charger(
@@ -1456,7 +1494,7 @@ public:
           new_nodes.push_back(new_node);
         }
       }
-    //}
+    #endif
 
     return new_nodes;
   }
@@ -1501,7 +1539,7 @@ public:
     while (!priority_queue.empty() && !(interrupter && interrupter()))
     {
       std::cout << "iteration....." << std::endl;
-      std::cout << *priority_queue.top() << std::endl;
+      //std::cout << *priority_queue.top() << std::endl;
       /*PriorityQueue pq_copy = priority_queue;
       while(!pq_copy.empty()){
         std::cout << *(pq_copy.top()) << std::endl;

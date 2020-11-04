@@ -450,17 +450,45 @@ SCENARIO("Grid World")
 
   std::vector<int> test4_waypoints {13, 2, 13, 2};
 
+  // Identical to earlier test above
+  std::vector<std::tuple<int,int,int>> test5 {
+    {0,3,0},
+    {2,15,0},
+    {7,9,0},
+    {8,11,50000},
+    {5,10,50000},
+    {4,8,60000},
+    {8,14,60000},
+    {5,11,60000},
+    {9,0,60000},
+    {1,3,60000},
+    {0,12,60000}};
+
+  std::vector<int> test5_waypoints {13, 2, 13, 2};
+
   bool test_optimal = true; // set to true if you want to invoke the optimal solver
 
-  // Hardcoded tests
-  std::vector<std::vector<std::tuple<int,int,int>>> tests {test4};//{test1, test2, test3, test4};
-  std::vector<std::vector<int>> test_waypoints {test4_waypoints};//{test1_waypoints, test2_waypoints, test3_waypoints, test4_waypoints};
+  // Hardcoded tests - 11 tasks, different start times
+  std::vector<std::vector<std::tuple<int,int,int>>> tests {test1, test2, test3, test4, test5};
+  std::vector<std::vector<int>> test_waypoints {test1_waypoints, test2_waypoints, test3_waypoints, test4_waypoints, test5_waypoints};
   run_tests(tests, test_waypoints, battery_system, planner, motion_sink, device_sink, drain_battery, test_optimal);
 
   // Randomly generated tests
+
+  //7 tasks, start time 0
   std::pair<std::vector<std::vector<std::tuple<int,int,int>>>,
-    std::vector<std::vector<int>>> auto_gen_testcases =
-    generate_testcases(15, {{4,0},{3,50000},{4,70000}}, 30);
+    std::vector<std::vector<int>>> auto_gen_testcases_1 =
+    generate_testcases(7, {{7,0}}, 20);
+
+  //7 tasks, start time 30000
+  std::pair<std::vector<std::vector<std::tuple<int,int,int>>>,
+    std::vector<std::vector<int>>> auto_gen_testcases_2 =
+    generate_testcases(7, {{7,30000}}, 20);
+
+  //15 tasks, different start times
+  std::pair<std::vector<std::vector<std::tuple<int,int,int>>>,
+    std::vector<std::vector<int>>> auto_gen_testcases_3 =
+    generate_testcases(15, {{4,0},{3,50000},{4,70000}}, 20);
 
   //run_tests(auto_gen_testcases.first, auto_gen_testcases.second, battery_system,
   //  planner, motion_sink, device_sink, drain_battery, test_optimal);
