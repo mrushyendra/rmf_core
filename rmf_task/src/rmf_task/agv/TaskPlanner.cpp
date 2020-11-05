@@ -37,9 +37,9 @@ namespace agv {
 
 // Switch between old and new versions for testing
 #define ORIGINAL // Uncomment to use modified complete_solve algorithm
-//#define NEW_HN // use updated heuristic function h(n)
-//#define EXCLUDE_CHARGING_COST // exclude any charging tasks from cost g(n)
-//#define VARIANT_VAL_FIX // get variant value from earliest start time, not from time_now
+#define NEW_HN // use updated heuristic function h(n)
+#define EXCLUDE_CHARGING_COST // exclude any charging tasks from cost g(n)
+#define VARIANT_VAL_FIX // get variant value from earliest start time, not from time_now
 //#define NO_SEGMENTATION_THRESHOLD // increases segmentation_threshold to arbitrarily large value
 //#define NO_EXPAND_CHARGE // does not call expand_charge with new implementation
 
@@ -177,6 +177,23 @@ bool TaskPlanner::Assignment::include_in_cost() const
 namespace {
 
 // ============================================================================
+#ifdef NEW_HN
+struct Invariant
+{
+  std::size_t task_id;
+  double earliest_start_time;
+  double earliest_finish_time;
+};
+
+// ============================================================================
+struct InvariantLess
+{
+  bool operator()(const Invariant& a, const Invariant& b) const
+  {
+    return a.earliest_finish_time < b.earliest_finish_time;
+  }
+};
+#else
 struct Invariant
 {
   std::size_t task_id;
@@ -191,6 +208,7 @@ struct InvariantLess
     return a.invariant_cost < b.invariant_cost;
   }
 };
+#endif
 
 // ============================================================================
 class Candidates
@@ -419,6 +437,26 @@ struct Node
   rmf_traffic::Time latest_time;
   InvariantSet unassigned_invariants;
 
+  #ifdef NEW_HN
+  void sort_invariants()
+  {
+    unassigned_invariants.clear();
+    for (const auto& u : unassigned_tasks)
+    {
+      double earliest_start_time = rmf_traffic::time::to_seconds(
+        u.second.earliest_start_time.time_since_epoch());
+      double earliest_finish_time = earliest_start_time
+        + rmf_traffic::time::to_seconds(u.second.request->invariant_duration());
+
+      unassigned_invariants.insert(
+        Invariant{
+          u.first,
+          earliest_start_time,
+          earliest_finish_time
+        });
+    }
+  }
+  #else
   void sort_invariants()
   {
     unassigned_invariants.clear();
@@ -431,6 +469,7 @@ struct Node
         });
     }
   }
+  #endif
 
   void pop_unassigned(std::size_t task_id)
   {
@@ -581,12 +620,11 @@ public:
       _stacks.push_back({{value,-1}});
   }
 
-  void add(const double earliest_start_time_secs, const double earliest_finish_time)
+  void add(const double earliest_start_time, const double earliest_finish_time)
   {
     double prev_end_value = _stacks[0].back().first;
-    //double new_end_value = std::max(prev_end_value, earliest_start_time_secs) + (earliest_finish_time - earliest_start_time_secs);
-    double new_end_value = prev_end_value + (earliest_finish_time - earliest_start_time_secs);
-    _stacks[0].push_back(std::make_pair(new_end_value, earliest_start_time_secs));
+    double new_end_value = prev_end_value + (earliest_finish_time - earliest_start_time);
+    _stacks[0].push_back(std::make_pair(new_end_value, earliest_start_time));
 
     // Find the largest stack that is still smaller than the current front
     const auto next_it = _stacks.begin() + 1;
@@ -613,8 +651,11 @@ public:
       // NOTE: We start iterating from i=1 because i=0 represents a component of
       // the cost that is already accounted for by g(n) and the variant
       // component of h(n)
-      for (std::size_t i=1; i < stack.size(); ++i){
-        total_cost += std::max(0.0,(stack[i].first - stack[i].second));
+      for (std::size_t i = 1; i < stack.size(); ++i)
+      {
+        // Set lower bound of 0 in case optimistically calculated end time is smaller than
+        // earliest start time
+        total_cost += std::max(0.0, (stack[i].first - stack[i].second));
       }
     }
 
@@ -976,19 +1017,20 @@ public:
 
   double compute_h(const Node& node, const rmf_traffic::Time time_now)
   {
-    std::vector<double> initial_queue_values;
-    initial_queue_values.resize(
-          node.assigned_tasks.size(), 0.0);
+    std::vector<double> initial_queue_values(
+      node.assigned_tasks.size(), 0.0);
 
     for(size_t i = 0; i < node.assigned_tasks.size(); ++i)
     {
       if (node.assigned_tasks[i].empty())
       {
-        initial_queue_values[i] = time_now.time_since_epoch().count()/1e9;
+        initial_queue_values[i] = rmf_traffic::time::to_seconds(
+          time_now.time_since_epoch());
       }
       else
       {
-        initial_queue_values[i] = node.assigned_tasks[i].back().state().finish_time().time_since_epoch().count()/1e9;
+        initial_queue_values[i] = rmf_traffic::time::to_seconds(
+          node.assigned_tasks[i].back().state().finish_time().time_since_epoch());
       }
     }
 
@@ -997,26 +1039,12 @@ public:
     // here. The InvariantHeuristicQueue expects the invariant costs to be passed
     // to it in order of smallest to largest. If that assumption is not met, then
     // the final cost that's calculated may be invalid.
-
-    std::vector<std::pair<double,double>> unassigned_task_vals;
-    for (const auto& u : node.unassigned_tasks)
+    for(const auto& u : node.unassigned_invariants)
     {
-      double earliest_start_time_secs =  u.second.earliest_start_time.time_since_epoch().count()/1e9;
-      double earliest_finish_time = earliest_start_time_secs + rmf_traffic::time::to_seconds(u.second.request->invariant_duration());
-      unassigned_task_vals.push_back({earliest_start_time_secs,earliest_finish_time});
+      queue.add(u.earliest_start_time, u.earliest_finish_time);
     }
-    std::sort(unassigned_task_vals.begin(), unassigned_task_vals.end(), [](const std::pair<double,double>& a, const std::pair<double,double>& b){
-      return a.second < b.second;
-    });
-
-    for(auto& val : unassigned_task_vals)
-    {
-      queue.add(val.first, val.second);
-    }
-
     return queue.compute_cost();
   }
-
   #endif
 
   //change to start_time+invariant_time -> sort by smallest -> cost equals finishing time - start_time for each
