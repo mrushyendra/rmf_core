@@ -951,7 +951,7 @@ public:
   {
     std::vector<double> initial_queue_values;
     initial_queue_values.resize(
-          node.assigned_tasks.size(), 0.0);//std::numeric_limits<double>::infinity());
+          node.assigned_tasks.size(), std::numeric_limits<double>::infinity());
 
     for (const auto& u : node.unassigned_tasks)
     {
