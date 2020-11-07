@@ -919,7 +919,6 @@ public:
     new_node->pop_unassigned(u.first);
 
     // Update states of unassigned tasks for the candidate
-    bool add_charger = false;
     for (auto& new_u : new_node->unassigned_tasks)
     {
       const auto finish =
@@ -932,71 +931,29 @@ public:
           entry.candidate,
           finish.value().finish_state(),
           finish.value().wait_until(),
-          entry.state,
-          false);
+          entry.state, false);
       }
       else
       {
-        // TODO(YV): Revisit this strategy
-        // auto battery_estimate =
-        //   config->charge_battery_request()->estimate_finish(entry.state, state_config);
-        // if (battery_estimate.has_value())
-        // {
-        //   auto new_finish =
-        //     new_u.second.request->estimate_finish(
-        //       battery_estimate.value().finish_state(),
-        //       state_config);
-        //   assert(new_finish.has_value());
-        //   new_u.second.candidates.update_candidate(
-        //     entry.candidate,
-        //     new_finish.value().finish_state(),
-        //     new_finish.value().wait_until());
-        // }
-        // else
-        // {
-        //   // Unable to reach charger
-        //   return nullptr;
-        // }
-
-        add_charger = true;
-        break;
-      }
-    }
-
-    if (add_charger)
-    {
-      auto charge_battery = make_charging_request(entry.state.finish_time());
-      auto battery_estimate = charge_battery->estimate_finish(entry.state, state_config);
-      if (battery_estimate.has_value())
-      {
-        new_node->assigned_tasks[entry.candidate].push_back(
-          Assignment
-          {
-            charge_battery,
-            battery_estimate.value().finish_state(),
-            battery_estimate.value().wait_until()
-          });
-        for (auto& new_u : new_node->unassigned_tasks)
+        auto charge_battery = make_charging_request(entry.state.finish_time());
+        auto battery_estimate = charge_battery->estimate_finish(entry.state, state_config);
+        if (battery_estimate.has_value())
         {
           const auto finish =
             new_u.second.request->estimate_finish(battery_estimate.value().finish_state(), state_config);
-          if (finish.has_value())
-          {
-            new_u.second.candidates.update_candidate(
-              entry.candidate, finish.value().finish_state(), finish.value().wait_until(), entry.state, false);
-          }
-          else
-          {
-            // We should stop expanding this node
-            return nullptr;
-          }
+          assert(finish.has_value());
+          new_u.second.candidates.update_candidate(
+            entry.candidate,
+            finish.value().finish_state(),
+            finish.value().wait_until(),
+            entry.state,
+            true);
         }
-        
-      }
-      else
-      {
-        // Agent cannot make it back to the charger
-        return nullptr;
+        else
+        {
+          // Agent cannot make it back to the charger
+          return nullptr;
+        }
       }
     }
 
@@ -1082,6 +1039,17 @@ public:
     while (!finished(*node))
     {
       ConstNodePtr next_node = nullptr;
+
+      for (std::size_t i = 0; i < node->assigned_tasks.size(); ++i)
+      {
+        auto new_node = expand_charger(
+          node, i, initial_states, state_configs, time_now);
+        if (!next_node || (new_node && new_node->cost_estimate < next_node->cost_estimate))
+        {
+          next_node = std::move(new_node);
+        }
+      }
+
       for (const auto& u : node->unassigned_tasks)
       {
         const auto& range = u.second.candidates.best_candidates();
