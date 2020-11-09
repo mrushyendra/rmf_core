@@ -318,7 +318,7 @@ Candidates Candidates::make(
           Entry{
             i,
             new_finish.value().finish_state(),
-            new_finish.value().wait_until(),
+            battery_estimate.value().wait_until(),//new_finish.value().wait_until(),
             state,
             true}});
       }
@@ -909,12 +909,23 @@ public:
               battery_estimate.value().finish_state(),
               battery_estimate.value().wait_until()
             });
-        } 
+          const auto finish =
+            u.second.request->estimate_finish(battery_estimate.value().finish_state(), state_config);
+          if (finish.has_value())
+          {
+            // Assign the unassigned task
+            new_node->assigned_tasks[entry.candidate].push_back(
+              Assignment{u.second.request, finish.value().finish_state(),
+              finish.value().wait_until()});
+          }
+        }
       }
     }
-    new_node->assigned_tasks[entry.candidate].push_back(
-      Assignment{u.second.request, entry.state, entry.wait_until});
-    
+    else
+    {
+      new_node->assigned_tasks[entry.candidate].push_back(
+        Assignment{u.second.request, entry.state, entry.wait_until});
+    }
     // Erase the assigned task from unassigned tasks
     new_node->pop_unassigned(u.first);
 
@@ -945,7 +956,7 @@ public:
           new_u.second.candidates.update_candidate(
             entry.candidate,
             finish.value().finish_state(),
-            finish.value().wait_until(),
+            battery_estimate.value().wait_until(),//finish.value().wait_until(),
             entry.state,
             true);
         }
