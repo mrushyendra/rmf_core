@@ -132,21 +132,22 @@ rmf_utils::optional<rmf_task::Estimate> Delivery::estimate_finish(
   if (initial_state.waypoint() != _pimpl->_pickup_waypoint)
   {
     auto endpoints = std::make_pair(initial_state.waypoint(), _pimpl->_pickup_waypoint);
-    if (_pimpl->_plan_cache->count(endpoints))
+    // Use previously memoized values if possible
+    if (_pimpl->_plan_cache->saved(endpoints))
     {
-      auto& cache_result = (*(_pimpl->_plan_cache))[endpoints];
-      variant_duration = cache_result.first;
-      battery_soc = battery_soc - cache_result.second;
+      const auto& cache_result = _pimpl->_plan_cache->read(endpoints);
+      variant_duration = cache_result.duration;
+      battery_soc = battery_soc - cache_result.dsoc;
     }
     else
     {
       // Compute plan to pickup waypoint along with battery drain
       rmf_traffic::agv::Planner::Start start{
         start_time,
-        initial_state.waypoint(),
+        endpoints.first,
         0.0};
 
-      rmf_traffic::agv::Planner::Goal goal{_pimpl->_pickup_waypoint};
+      rmf_traffic::agv::Planner::Goal goal{endpoints.second};
 
       const auto result_to_pickup = _pimpl->_planner->plan(start, goal);
       // We assume we can always compute a plan
@@ -165,9 +166,7 @@ rmf_utils::optional<rmf_task::Estimate> Delivery::estimate_finish(
         battery_soc = battery_soc - dSOC_motion - dSOC_device;
       }
 
-      // Add result to cache
-      (*(_pimpl->_plan_cache))[std::pair<size_t,size_t>(initial_state.waypoint(), _pimpl->_pickup_waypoint)] = std::make_pair(variant_duration, dSOC_motion + dSOC_device);
-      std::cout << "size: " << _pimpl->_plan_cache->size() << std::endl;
+      _pimpl->_plan_cache->save(endpoints, variant_duration, dSOC_motion + dSOC_device);
     }
 
     if (battery_soc <= state_config.threshold_soc())
@@ -194,19 +193,19 @@ rmf_utils::optional<rmf_task::Estimate> Delivery::estimate_finish(
     if ( _pimpl->_dropoff_waypoint != state.charging_waypoint())
     {
       auto endpoints = std::make_pair(_pimpl->_dropoff_waypoint, state.charging_waypoint());
-      if (_pimpl->_plan_cache->count(endpoints))
+      if (_pimpl->_plan_cache->saved(endpoints))
       {
-        auto& cache_result = (*(_pimpl->_plan_cache))[endpoints];
-        retreat_battery_drain = cache_result.second;
+        const auto& cache_result = _pimpl->_plan_cache->read(endpoints);
+        retreat_battery_drain = cache_result.dsoc;
       }
       else
       {
         rmf_traffic::agv::Planner::Start start{
           state.finish_time(),
-          _pimpl->_dropoff_waypoint,
+          endpoints.first,
           0.0};
 
-        rmf_traffic::agv::Planner::Goal goal{state.charging_waypoint()};
+        rmf_traffic::agv::Planner::Goal goal{endpoints.second};
 
         const auto result_to_charger = _pimpl->_planner->plan(start, goal);
         // We assume we can always compute a plan
@@ -220,6 +219,8 @@ rmf_utils::optional<rmf_task::Estimate> Delivery::estimate_finish(
         dSOC_device = _pimpl->_device_sink->compute_change_in_charge(
             rmf_traffic::time::to_seconds(retreat_duration));
         retreat_battery_drain = dSOC_motion + dSOC_device;
+
+        _pimpl->_plan_cache->save(endpoints, retreat_duration, retreat_battery_drain);
       }
     }
 

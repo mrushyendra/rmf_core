@@ -514,7 +514,7 @@ SCENARIO("Grid World")
     std::vector<std::vector<int>>> auto_gen_testcases_4 =
     generate_testcases(15, {{4,0},{3,50000},{4,70000}, {3,90000}, {5, 130000},{2,170000}, {4, 190000}, {3, 220000}, {1, 250000}}, 2);
 
-  //run_tests(auto_gen_testcases_3.first, auto_gen_testcases_3.second, battery_system,
+  //run_tests(auto_gen_testcases.first, auto_gen_testcases.second, battery_system,
   //  planner, plan_cache, motion_sink, device_sink, drain_battery, test_optimal);
 }
 

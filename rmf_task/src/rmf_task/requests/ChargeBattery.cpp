@@ -113,21 +113,22 @@ rmf_utils::optional<rmf_task::Estimate> ChargeBattery::estimate_finish(
   if (initial_state.waypoint() != initial_state.charging_waypoint())
   {
     auto endpoints = std::make_pair(initial_state.waypoint(), initial_state.charging_waypoint());
-    if (_pimpl->_plan_cache->count(endpoints))
+    // Use memoized values if possible
+    if (_pimpl->_plan_cache->saved(endpoints))
     {
-      auto& cache_result = (*(_pimpl->_plan_cache))[endpoints];
-      variant_duration = cache_result.first;
-      battery_soc = battery_soc - cache_result.second;
+      const auto& cache_result = _pimpl->_plan_cache->read(endpoints);
+      variant_duration = cache_result.duration;
+      battery_soc = battery_soc - cache_result.dsoc;
     }
     else
     {
       // Compute plan to charging waypoint along with battery drain
       rmf_traffic::agv::Planner::Start start{
         start_time,
-        initial_state.waypoint(),
+        endpoints.first,
         0.0};
 
-      rmf_traffic::agv::Planner::Goal goal{initial_state.charging_waypoint()};
+      rmf_traffic::agv::Planner::Goal goal{endpoints.second};
 
       const auto result = _pimpl->_planner->plan(start, goal);
       const auto& trajectory = result->get_itinerary().back().trajectory();
@@ -143,12 +144,10 @@ rmf_utils::optional<rmf_task::Estimate> ChargeBattery::estimate_finish(
         battery_soc = battery_soc - dSOC_motion - dSOC_device;
       }
 
-      // Add result to cache
-      (*(_pimpl->_plan_cache))[std::pair<size_t,size_t>(initial_state.waypoint(), initial_state.charging_waypoint())] = std::make_pair(variant_duration, dSOC_motion + dSOC_device);
-      //std::cout << "size: " << plan_cache.size() << std::endl;
+      _pimpl->_plan_cache->save(endpoints, variant_duration, dSOC_motion + dSOC_device);
     }
     // If a robot cannot reach its charging dock given its initial battery soc
-    if (battery_soc <= state_config.threshold_soc())
+    if (_pimpl->_drain_battery && battery_soc <= state_config.threshold_soc())
       return rmf_utils::nullopt;
   }
 
