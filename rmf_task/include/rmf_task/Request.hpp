@@ -35,6 +35,8 @@ struct PairHash {
   }
 };
 
+using PlanCache = std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>;
+
 /// Implement this for new type of requests.
 class Request
 {
@@ -49,8 +51,7 @@ public:
   /// time the robot has to wait before commencing the task
   virtual rmf_utils::optional<Estimate> estimate_finish(
     const agv::State& initial_state,
-    const agv::StateConfig& state_config,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache) const = 0;
+    const agv::StateConfig& state_config) const = 0;
 
   /// Estimate the invariant component of the task's duration
   virtual rmf_traffic::Duration invariant_duration() const = 0;

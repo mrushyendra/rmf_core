@@ -19,6 +19,7 @@
 #include <rmf_task/agv/TaskPlanner.hpp>
 #include <rmf_task/agv/State.hpp>
 #include <rmf_task/agv/StateConfig.hpp>
+#include <rmf_task/Request.hpp>
 #include <rmf_task/requests/Delivery.hpp>
 #include <rmf_task/requests/ChargeBattery.hpp>
 
@@ -54,6 +55,7 @@ void run_tests(std::vector<std::vector<std::tuple<int,int,int>>> tests,
   std::vector<std::vector<int>> test_waypoints,
   const rmf_battery::agv::BatterySystem& battery_system,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<rmf_task::PlanCache> plan_cache,
   std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
   bool drain_battery,
@@ -65,6 +67,7 @@ std::pair<Assignments, double> compute_assignments(const std::vector<std::tuple<
   size_t charging_pt2,
   const rmf_battery::agv::BatterySystem& battery_system,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<rmf_task::PlanCache> plan_cache,
   std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
   bool drain_battery,
@@ -148,6 +151,8 @@ SCENARIO("Grid World")
       rmf_traffic::agv::Planner::Configuration{graph, traits},
       default_options);
 
+  auto plan_cache = std::make_shared<rmf_task::PlanCache>();
+
   rmf_battery::agv::BatterySystem battery_system{24.0, 40.0, 8.8};
   REQUIRE(battery_system.valid());
   rmf_battery::agv::MechanicalSystem mechanical_system{70.0, 40.0, 0.22};
@@ -189,6 +194,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -199,6 +205,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -209,6 +216,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery)
     };
@@ -264,6 +272,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -274,6 +283,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -284,6 +294,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -294,6 +305,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(50000),
         drain_battery),
 
@@ -304,6 +316,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(50000),
         drain_battery),
 
@@ -314,6 +327,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery),
 
@@ -324,6 +338,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery),
 
@@ -334,6 +349,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery),
 
@@ -344,6 +360,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery),
 
@@ -354,6 +371,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery),
 
@@ -364,6 +382,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
+        plan_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery)
     };
@@ -471,7 +490,7 @@ SCENARIO("Grid World")
   // Hardcoded tests - 11 tasks, different start times
   std::vector<std::vector<std::tuple<int,int,int>>> tests {test1, test2, test3, test4, test5};
   std::vector<std::vector<int>> test_waypoints {test1_waypoints, test2_waypoints, test3_waypoints, test4_waypoints, test5_waypoints};
-  run_tests(tests, test_waypoints, battery_system, planner, motion_sink, device_sink, drain_battery, test_optimal);
+  run_tests(tests, test_waypoints, battery_system, planner, plan_cache, motion_sink, device_sink, drain_battery, test_optimal);
 
   // Randomly generated tests
 
@@ -496,7 +515,7 @@ SCENARIO("Grid World")
     generate_testcases(15, {{4,0},{3,50000},{4,70000}, {3,90000}, {5, 130000},{2,170000}, {4, 190000}, {3, 220000}, {1, 250000}}, 2);
 
   //run_tests(auto_gen_testcases_3.first, auto_gen_testcases_3.second, battery_system,
-  //  planner, motion_sink, device_sink, drain_battery, test_optimal);
+  //  planner, plan_cache, motion_sink, device_sink, drain_battery, test_optimal);
 }
 
 // Randomly generates a testcase, where `max` is the number of waypoints on the map,
@@ -548,6 +567,7 @@ void run_tests(std::vector<std::vector<std::tuple<int,int,int>>> tests,
   std::vector<std::vector<int>> test_waypoints,
   const rmf_battery::agv::BatterySystem& battery_system,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<rmf_task::PlanCache> plan_cache,
   std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
   bool drain_battery,
@@ -559,7 +579,7 @@ void run_tests(std::vector<std::vector<std::tuple<int,int,int>>> tests,
     auto& waypoints = test_waypoints[i];
     auto& test = tests[i];
     std::pair<Assignments, double> assignment = compute_assignments(test, waypoints[0],
-        waypoints[1], waypoints[2], waypoints[3], battery_system, planner,
+        waypoints[1], waypoints[2], waypoints[3], battery_system, planner, plan_cache,
         motion_sink, device_sink, drain_battery, optimal);
     assignments.push_back(std::move(assignment));
   }
@@ -586,6 +606,7 @@ std::pair<Assignments, double> compute_assignments(const std::vector<std::tuple<
   size_t charging_pt2,
   const rmf_battery::agv::BatterySystem& battery_system,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<rmf_task::PlanCache> plan_cache,
   std::shared_ptr<rmf_battery::agv::SimpleMotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::agv::SimpleDevicePowerSink> device_sink,
   bool drain_battery,
@@ -618,6 +639,7 @@ std::pair<Assignments, double> compute_assignments(const std::vector<std::tuple<
       motion_sink,
       device_sink,
       planner,
+      plan_cache,
       now + rmf_traffic::time::from_seconds(std::get<2>(request_data[i])),
       drain_battery);
     requests.push_back(std::move(new_task));
@@ -628,7 +650,8 @@ std::pair<Assignments, double> compute_assignments(const std::vector<std::tuple<
       battery_system,
       motion_sink,
       device_sink,
-      planner);
+      planner,
+      plan_cache);
   rmf_task::agv::TaskPlanner task_planner(task_config);
 
   if(optimal)

@@ -52,6 +52,7 @@ public:
   std::shared_ptr<rmf_battery::MotionPowerSink> motion_sink;
   std::shared_ptr<rmf_battery::DevicePowerSink> ambient_sink;
   std::shared_ptr<rmf_traffic::agv::Planner> planner;
+  std::shared_ptr<PlanCache> plan_cache;
   FilterType filter_type;
 
 };
@@ -61,6 +62,7 @@ TaskPlanner::Configuration::Configuration(
   std::shared_ptr<rmf_battery::MotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::DevicePowerSink> ambient_sink,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<PlanCache> plan_cache,
   const FilterType filter_type)
 : _pimpl(rmf_utils::make_impl<Implementation>(
       Implementation{
@@ -68,6 +70,7 @@ TaskPlanner::Configuration::Configuration(
         std::move(motion_sink),
         std::move(ambient_sink),
         std::move(planner),
+        std::move(plan_cache),
         filter_type
       }))
 {
@@ -105,6 +108,12 @@ std::shared_ptr<rmf_traffic::agv::Planner> TaskPlanner::Configuration::planner()
 {
   return _pimpl->planner;
 } 
+
+//==============================================================================
+std::shared_ptr<PlanCache> TaskPlanner::Configuration::plan_cache() const
+{
+  return _pimpl->plan_cache;
+}
 
 //==============================================================================
 TaskPlanner::FilterType TaskPlanner::Configuration::filter_type() const
@@ -229,8 +238,7 @@ public:
     const std::vector<State>& initial_states,
     const std::vector<StateConfig>& state_configs,
     const rmf_task::Request& request,
-    const rmf_task::Request& charge_battery_request,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache);
+    const rmf_task::Request& charge_battery_request);
 
   Candidates(const Candidates& other)
   {
@@ -353,8 +361,7 @@ Candidates Candidates::make(
   const std::vector<State>& initial_states,
   const std::vector<StateConfig>& state_configs,
   const rmf_task::Request& request,
-  const rmf_task::Request& charge_battery_request,
-  std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache)
+  const rmf_task::Request& charge_battery_request)
 {
   Map initial_map;
   std::unordered_map<std::size_t, State> add_charging_task;
@@ -362,7 +369,7 @@ Candidates Candidates::make(
   {
     const auto& state = initial_states[i];
     const auto& state_config = state_configs[i];
-    const auto finish = request.estimate_finish(state, state_config, plan_cache);
+    const auto finish = request.estimate_finish(state, state_config);
     if (finish.has_value())
     {
       initial_map.insert({
@@ -373,13 +380,13 @@ Candidates Candidates::make(
     else
     {
       auto battery_estimate =
-        charge_battery_request.estimate_finish(state, state_config, plan_cache);
+        charge_battery_request.estimate_finish(state, state_config);
       if (battery_estimate.has_value())
       {
         add_charging_task.insert(std::make_pair(i, state));
 
         auto new_finish = request.estimate_finish(
-          battery_estimate.value().finish_state(), state_config, plan_cache);
+          battery_estimate.value().finish_state(), state_config);
         assert(new_finish.has_value());
         #ifdef ORIGINAL
           auto wait_until_time = new_finish.value().wait_until();
@@ -411,11 +418,10 @@ struct PendingTask
     std::vector<rmf_task::agv::State>& initial_states,
     std::vector<rmf_task::agv::StateConfig>& state_configs,
     rmf_task::Request::SharedPtr request_,
-    rmf_task::Request::SharedPtr charge_battery_request,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache)
+    rmf_task::Request::SharedPtr charge_battery_request)
   : request(std::move(request_)),
     candidates(Candidates::make(initial_states,
-    state_configs, *request, *charge_battery_request, plan_cache)),
+    state_configs, *request, *charge_battery_request)),
     earliest_start_time(request->earliest_start_time())
   {
     // Do nothing
@@ -833,6 +839,7 @@ public:
       config->motion_sink(),
       config->ambient_sink(),
       config->planner(),
+      config->plan_cache(),
       start_time,
       true);
   }
@@ -885,9 +892,7 @@ public:
   {
     assert(initial_states.size() == state_configs.size());
 
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash> plan_cache;
-
-    auto node = make_initial_node(initial_states, state_configs, requests, time_now, plan_cache);
+    auto node = make_initial_node(initial_states, state_configs, requests, time_now);
 
     Node::AssignedTasks complete_assignments;
     complete_assignments.resize(node->assigned_tasks.size());
@@ -895,9 +900,9 @@ public:
     while (node)
     {
       if (greedy)
-        node = greedy_solve(node, initial_states, state_configs, time_now, plan_cache);
+        node = greedy_solve(node, initial_states, state_configs, time_now);
       else
-        node = solve(node, initial_states, state_configs, requests.size(), time_now, interrupter, plan_cache);
+        node = solve(node, initial_states, state_configs, requests.size(), time_now, interrupter);
 
       if (!node)
         return {};
@@ -939,7 +944,7 @@ public:
           estimates[i] = assignments.back().state();
       }
 
-      node = make_initial_node(estimates, state_configs, new_tasks, time_now, plan_cache);
+      node = make_initial_node(estimates, state_configs, new_tasks, time_now);
       initial_states = estimates;
     }
 
@@ -1087,8 +1092,7 @@ public:
     std::vector<State> initial_states,
     std::vector<StateConfig> state_configs,
     std::vector<Request::SharedPtr> requests,
-    rmf_traffic::Time time_now,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache)
+    rmf_traffic::Time time_now)
   {
     auto initial_node = std::make_shared<Node>();
 
@@ -1100,7 +1104,7 @@ public:
       initial_node->unassigned_tasks.insert(
         {
           request->id(),
-          PendingTask(initial_states, state_configs, request, charge_battery, plan_cache)
+          PendingTask(initial_states, state_configs, request, charge_battery)
         });
 
     initial_node->cost_estimate = compute_f(*initial_node, time_now);
@@ -1160,8 +1164,7 @@ public:
     const ConstNodePtr& parent,
     Filter* filter,
     rmf_traffic::Time time_now,
-    const std::vector<StateConfig>& state_configs,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache)
+    const std::vector<StateConfig>& state_configs)
 
   {
     const auto& entry = it->second;
@@ -1188,7 +1191,7 @@ public:
     {
       const auto finish =
         new_u.second.request->estimate_finish(
-        entry.state, state_config, plan_cache);
+        entry.state, state_config);
 
       if (finish.has_value())
       {
@@ -1207,7 +1210,7 @@ public:
     if (add_charger)
     {
       auto charge_battery = make_charging_request(entry.state.finish_time());
-      auto battery_estimate = charge_battery->estimate_finish(entry.state, state_config, plan_cache);
+      auto battery_estimate = charge_battery->estimate_finish(entry.state, state_config);
       if (battery_estimate.has_value())
       {
         new_node->assigned_tasks[entry.candidate].push_back(
@@ -1222,7 +1225,7 @@ public:
         {
           const auto finish =
             new_u.second.request->estimate_finish(
-            battery_estimate.value().finish_state(), state_config, plan_cache);
+            battery_estimate.value().finish_state(), state_config);
           if (finish.has_value())
           {
             new_u.second.candidates.update_candidate(
@@ -1263,8 +1266,7 @@ public:
     const ConstNodePtr& parent,
     Filter* filter,
     rmf_traffic::Time time_now,
-    const std::vector<StateConfig>& state_configs,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache)
+    const std::vector<StateConfig>& state_configs)
   {
     const auto& entry = it->second;
 
@@ -1284,7 +1286,7 @@ public:
       State& old_state = *add_charging_task;
       auto charge_battery = make_charging_request(old_state.finish_time());
       auto battery_estimate = charge_battery->estimate_finish(old_state,
-        state_config, plan_cache);
+        state_config);
       if (battery_estimate.has_value())
       {
         new_node->assigned_tasks[entry.candidate].push_back(
@@ -1297,7 +1299,7 @@ public:
           });
       }
       const auto finish =
-        u.second.request->estimate_finish(battery_estimate.value().finish_state(), state_config, plan_cache);
+        u.second.request->estimate_finish(battery_estimate.value().finish_state(), state_config);
       if (finish.has_value())
       {
         // Assign the unassigned task
@@ -1322,7 +1324,7 @@ public:
     {
       const auto finish =
         new_u.second.request->estimate_finish(
-        entry.state, state_config, plan_cache);
+        entry.state, state_config);
 
       if (finish.has_value())
       {
@@ -1337,14 +1339,14 @@ public:
       {
         auto charge_battery = make_charging_request(entry.state.finish_time());
         auto battery_estimate = charge_battery->estimate_finish(entry.state,
-          state_config, plan_cache);
+          state_config);
         if (battery_estimate.has_value())
         {
           new_u.second.candidates.set_old_state(entry.candidate, entry.state);
           auto new_finish =
             new_u.second.request->estimate_finish(
               battery_estimate.value().finish_state(),
-              state_config, plan_cache);
+              state_config);
           assert(new_finish.has_value());
           new_u.second.candidates.update_candidate(
             entry.candidate,
@@ -1378,8 +1380,7 @@ public:
     const std::size_t agent,
     const std::vector<State>& initial_states,
     const std::vector<StateConfig>& state_configs,
-    rmf_traffic::Time time_now,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache)
+    rmf_traffic::Time time_now)
   {
     auto new_node = std::make_shared<Node>(*parent);
      // Assign charging task to an agent
@@ -1396,7 +1397,7 @@ public:
 
     auto charge_battery = make_charging_request(state.finish_time());
     auto estimate = charge_battery->estimate_finish(
-      state, state_configs[agent], plan_cache);
+      state, state_configs[agent]);
     if (estimate.has_value())
     {
       new_node->assigned_tasks[agent].push_back(
@@ -1411,7 +1412,7 @@ public:
         new_u.second.candidates.remove_old_state(agent); // For use with new version
         const auto finish =
           new_u.second.request->estimate_finish(
-            estimate.value().finish_state(), state_configs[agent], plan_cache);
+            estimate.value().finish_state(), state_configs[agent]);
         if (finish.has_value())
         {
           new_u.second.candidates.update_candidate(
@@ -1435,8 +1436,7 @@ public:
     ConstNodePtr node,
     const std::vector<State>& initial_states,
     const std::vector<StateConfig>& state_configs,
-    rmf_traffic::Time time_now,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache)
+    rmf_traffic::Time time_now)
   {
     while (!finished(*node))
     {
@@ -1447,7 +1447,7 @@ public:
       for (std::size_t i = 0; i < node->assigned_tasks.size(); ++i)
       {
         auto new_node = expand_charger(
-          node, i, initial_states, state_configs, time_now, plan_cache);
+          node, i, initial_states, state_configs, time_now);
         if(!next_node || (new_node && new_node->cost_estimate < next_node->cost_estimate)){
           next_node = std::move(new_node);
         }
@@ -1461,10 +1461,10 @@ public:
         {
           #ifdef ORIGINAL
           auto n = expand_candidate(it, u, node,
-              nullptr, time_now, state_configs, plan_cache);
+              nullptr, time_now, state_configs);
           #else
           auto n = expand_candidate_new(it, u, node,
-              nullptr, time_now, state_configs, plan_cache);
+              nullptr, time_now, state_configs);
           #endif
 
           if (n)
@@ -1491,8 +1491,7 @@ public:
                   it->second.candidate,
                   initial_states,
                   state_configs,
-                  time_now,
-                  plan_cache);
+                  time_now);
                 if (new_charge_node)
                 {
                   if (!next_node ||
@@ -1520,8 +1519,7 @@ public:
     Filter& filter,
     const std::vector<State>& initial_states,
     const std::vector<StateConfig>& state_configs,
-    rmf_traffic::Time time_now,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache)
+    rmf_traffic::Time time_now)
   {
     std::vector<ConstNodePtr> new_nodes;
     new_nodes.reserve(
@@ -1533,10 +1531,10 @@ public:
       {
         #ifdef ORIGINAL
         auto new_node = expand_candidate(
-          it, u, parent, &filter, time_now, state_configs, plan_cache);
+          it, u, parent, &filter, time_now, state_configs);
         #else
         auto new_node = expand_candidate_new(it, u, parent, &filter, time_now,
-          state_configs, plan_cache);
+          state_configs);
         #endif
 
         if (new_node) {
@@ -1550,7 +1548,7 @@ public:
       for (std::size_t i = 0; i < parent->assigned_tasks.size(); ++i)
       {
         auto new_node = expand_charger(
-          parent, i, initial_states, state_configs, time_now, plan_cache);
+          parent, i, initial_states, state_configs, time_now);
         if(new_node){
           new_nodes.push_back(new_node);
         }
@@ -1584,8 +1582,7 @@ public:
     const std::vector<StateConfig>& state_configs,
     const std::size_t num_tasks,
     rmf_traffic::Time time_now,
-    std::function<bool()> interrupter,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache)
+    std::function<bool()> interrupter)
   {
     using PriorityQueue = std::priority_queue<
       ConstNodePtr,
@@ -1621,7 +1618,7 @@ public:
 
       // Apply possible actions to expand the node
       const auto new_nodes = expand(
-        top, filter, initial_states, state_configs, time_now, plan_cache);
+        top, filter, initial_states, state_configs, time_now);
 
       // Add copies and with a newly assigned task to queue
       for (const auto&n : new_nodes)

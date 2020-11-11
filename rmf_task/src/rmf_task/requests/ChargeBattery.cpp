@@ -36,6 +36,7 @@ public:
   std::shared_ptr<rmf_battery::MotionPowerSink> _motion_sink;
   std::shared_ptr<rmf_battery::DevicePowerSink> _device_sink;
   std::shared_ptr<rmf_traffic::agv::Planner> _planner;
+  std::shared_ptr<PlanCache> _plan_cache;
   rmf_traffic::Time _start_time;
   bool _drain_battery;
 
@@ -50,6 +51,7 @@ rmf_task::Request::SharedPtr ChargeBattery::make(
   std::shared_ptr<rmf_battery::MotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::DevicePowerSink> device_sink,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<PlanCache> plan_cache,
   rmf_traffic::Time start_time,
   bool drain_battery)
 {
@@ -64,6 +66,7 @@ rmf_task::Request::SharedPtr ChargeBattery::make(
   charge_battery->_pimpl->_motion_sink = std::move(motion_sink);
   charge_battery->_pimpl->_device_sink = std::move(device_sink);
   charge_battery->_pimpl->_planner = std::move(planner);
+  charge_battery->_pimpl->_plan_cache = std::move(plan_cache);
   charge_battery->_pimpl->_start_time = start_time;
   charge_battery->_pimpl->_drain_battery = drain_battery;
   charge_battery->_pimpl->_invariant_duration =
@@ -85,8 +88,7 @@ std::size_t ChargeBattery::id() const
 //==============================================================================
 rmf_utils::optional<rmf_task::Estimate> ChargeBattery::estimate_finish(
   const agv::State& initial_state,
-  const agv::StateConfig& state_config,
-  std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache) const
+  const agv::StateConfig& state_config) const
 {
   if (abs(initial_state.battery_soc() - _pimpl->_charge_soc) < 1e-3)
     return rmf_utils::nullopt;
@@ -111,9 +113,9 @@ rmf_utils::optional<rmf_task::Estimate> ChargeBattery::estimate_finish(
   if (initial_state.waypoint() != initial_state.charging_waypoint())
   {
     auto endpoints = std::make_pair(initial_state.waypoint(), initial_state.charging_waypoint());
-    if (plan_cache.count(endpoints))
+    if (_pimpl->_plan_cache->count(endpoints))
     {
-      auto& cache_result = plan_cache[endpoints];
+      auto& cache_result = (*(_pimpl->_plan_cache))[endpoints];
       variant_duration = cache_result.first;
       battery_soc = battery_soc - cache_result.second;
     }
@@ -142,7 +144,7 @@ rmf_utils::optional<rmf_task::Estimate> ChargeBattery::estimate_finish(
       }
 
       // Add result to cache
-      plan_cache[std::pair<size_t,size_t>(initial_state.waypoint(), initial_state.charging_waypoint())] = std::make_pair(variant_duration, dSOC_motion + dSOC_device);
+      (*(_pimpl->_plan_cache))[std::pair<size_t,size_t>(initial_state.waypoint(), initial_state.charging_waypoint())] = std::make_pair(variant_duration, dSOC_motion + dSOC_device);
       //std::cout << "size: " << plan_cache.size() << std::endl;
     }
     // If a robot cannot reach its charging dock given its initial battery soc

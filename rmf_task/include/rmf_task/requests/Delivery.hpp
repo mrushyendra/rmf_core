@@ -46,6 +46,7 @@ public:
     std::shared_ptr<rmf_battery::MotionPowerSink> motion_sink,
     std::shared_ptr<rmf_battery::DevicePowerSink> device_sink,
     std::shared_ptr<rmf_traffic::agv::Planner> planner,
+    std::shared_ptr<PlanCache> plan_cache,
     rmf_traffic::Time start_time,
     bool drain_battery = true);
 
@@ -53,8 +54,7 @@ public:
 
   rmf_utils::optional<rmf_task::Estimate> estimate_finish(
     const agv::State& initial_state,
-    const agv::StateConfig& state_config,
-    std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache) const final;
+    const agv::StateConfig& state_config) const final;
 
   rmf_traffic::Duration invariant_duration() const final;
 

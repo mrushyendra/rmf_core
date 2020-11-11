@@ -78,6 +78,7 @@ public:
       std::shared_ptr<rmf_battery::MotionPowerSink> motion_sink,
       std::shared_ptr<rmf_battery::DevicePowerSink> ambient_sink,
       std::shared_ptr<rmf_traffic::agv::Planner> planner,
+      std::shared_ptr<PlanCache> plan_cache,
       FilterType filter_type= FilterType::Hash);
 
     /// Get the battery system
@@ -94,6 +95,9 @@ public:
 
     /// Get the planner
     std::shared_ptr<rmf_traffic::agv::Planner> planner() const;    
+
+    /// Get the plan cache
+    std::shared_ptr<PlanCache> plan_cache() const;
 
     /// Get the filter type
     FilterType filter_type() const;
