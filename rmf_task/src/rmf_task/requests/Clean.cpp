@@ -110,7 +110,8 @@ std::size_t Clean::id() const
 //==============================================================================
 rmf_utils::optional<rmf_task::Estimate> Clean::estimate_finish(
   const agv::State& initial_state,
-  const agv::StateConfig& state_config) const
+  const agv::StateConfig& state_config,
+  std::unordered_map<std::pair<size_t,size_t>, std::pair<rmf_traffic::Duration, double>, PairHash>& plan_cache) const
 {
   rmf_traffic::agv::Plan::Start final_plan_start{
     initial_state.finish_time(),

@@ -485,12 +485,17 @@ SCENARIO("Grid World")
     std::vector<std::vector<int>>> auto_gen_testcases_2 =
     generate_testcases(7, {{7,30000}}, 20);
 
-  //15 tasks, different start times
+  //11 tasks, different start times
   std::pair<std::vector<std::vector<std::tuple<int,int,int>>>,
     std::vector<std::vector<int>>> auto_gen_testcases_3 =
     generate_testcases(15, {{4,0},{3,50000},{4,70000}}, 20);
 
-  //run_tests(auto_gen_testcases.first, auto_gen_testcases.second, battery_system,
+  //29 tasks, different start times
+  std::pair<std::vector<std::vector<std::tuple<int,int,int>>>,
+    std::vector<std::vector<int>>> auto_gen_testcases_4 =
+    generate_testcases(15, {{4,0},{3,50000},{4,70000}, {3,90000}, {5, 130000},{2,170000}, {4, 190000}, {3, 220000}, {1, 250000}}, 2);
+
+  //run_tests(auto_gen_testcases_3.first, auto_gen_testcases_3.second, battery_system,
   //  planner, motion_sink, device_sink, drain_battery, test_optimal);
 }
 
