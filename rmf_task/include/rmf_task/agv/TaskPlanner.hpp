@@ -18,6 +18,7 @@
 #ifndef RMF_TASK__AGV__TASKPLANNER_HPP
 #define RMF_TASK__AGV__TASKPLANNER_HPP
 
+#include <rmf_task/Estimate.hpp>
 #include <rmf_task/Request.hpp>
 #include <rmf_task/agv/State.hpp>
 #include <rmf_task/agv/StateConfig.hpp>
@@ -78,7 +79,7 @@ public:
       std::shared_ptr<rmf_battery::MotionPowerSink> motion_sink,
       std::shared_ptr<rmf_battery::DevicePowerSink> ambient_sink,
       std::shared_ptr<rmf_traffic::agv::Planner> planner,
-      std::shared_ptr<PlanCache> plan_cache,
+      std::shared_ptr<EstimateCache> estimate_cache,
       FilterType filter_type= FilterType::Hash);
 
     /// Get the battery system
@@ -96,8 +97,8 @@ public:
     /// Get the planner
     std::shared_ptr<rmf_traffic::agv::Planner> planner() const;    
 
-    /// Get the plan cache
-    std::shared_ptr<PlanCache> plan_cache() const;
+    /// Get the estimate cache
+    std::shared_ptr<EstimateCache> estimate_cache() const;
 
     /// Get the filter type
     FilterType filter_type() const;

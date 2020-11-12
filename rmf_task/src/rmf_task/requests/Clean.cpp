@@ -38,7 +38,7 @@ public:
   std::shared_ptr<rmf_battery::DevicePowerSink> ambient_sink;
   std::shared_ptr<rmf_battery::DevicePowerSink> cleaning_sink;
   std::shared_ptr<rmf_traffic::agv::Planner> planner;
-  std::shared_ptr<PlanCache> plan_cache;
+  std::shared_ptr<EstimateCache> estimate_cache;
   bool drain_battery;
   rmf_traffic::Time start_time;
 
@@ -56,7 +56,7 @@ rmf_task::Request::SharedPtr Clean::make(
   std::shared_ptr<rmf_battery::DevicePowerSink> ambient_sink,
   std::shared_ptr<rmf_battery::DevicePowerSink> cleaning_sink,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
-  std::shared_ptr<PlanCache> plan_cache,
+  std::shared_ptr<EstimateCache> estimate_cache,
   rmf_traffic::Time start_time,
   bool drain_battery)
 {
@@ -69,7 +69,7 @@ rmf_task::Request::SharedPtr Clean::make(
   clean->_pimpl->ambient_sink = std::move(ambient_sink);
   clean->_pimpl->cleaning_sink = std::move(cleaning_sink);
   clean->_pimpl->planner = std::move(planner);
-  clean->_pimpl->plan_cache = std::move(plan_cache);
+  clean->_pimpl->estimate_cache = std::move(estimate_cache);
   clean->_pimpl->drain_battery = drain_battery;
   clean->_pimpl->start_time = start_time;
 
@@ -133,10 +133,11 @@ rmf_utils::optional<rmf_task::Estimate> Clean::estimate_finish(
 
   if (initial_state.waypoint() != _pimpl->start_waypoint)
   {
-    auto endpoints = std::make_pair(initial_state.waypoint(), _pimpl->start_waypoint);
-    if (_pimpl->plan_cache->saved(endpoints))
+    auto endpoints = std::make_pair(initial_state.waypoint(),
+      _pimpl->start_waypoint);
+    if (_pimpl->estimate_cache->saved(endpoints))
     {
-      const auto& cache_result = _pimpl->plan_cache->read(endpoints);
+      const auto& cache_result = _pimpl->estimate_cache->read(endpoints);
       variant_duration = cache_result.duration;
       battery_soc = battery_soc - cache_result.dsoc;
     }
@@ -167,7 +168,8 @@ rmf_utils::optional<rmf_task::Estimate> Clean::estimate_finish(
         battery_soc = battery_soc - dSOC_motion - dSOC_ambient;
       }
 
-      _pimpl->plan_cache->save(endpoints, variant_duration, dSOC_motion + dSOC_ambient);
+      _pimpl->estimate_cache->save(endpoints, variant_duration,
+        dSOC_motion + dSOC_ambient);
     }
 
     if (battery_soc <= state_config.threshold_soc())
@@ -193,10 +195,11 @@ rmf_utils::optional<rmf_task::Estimate> Clean::estimate_finish(
     double retreat_battery_drain = 0.0;
     if ( _pimpl->end_waypoint != state.charging_waypoint())
     {
-      auto endpoints = std::make_pair(_pimpl->end_waypoint, state.charging_waypoint());
-      if (_pimpl->plan_cache->saved(endpoints))
+      auto endpoints = std::make_pair(_pimpl->end_waypoint,
+        state.charging_waypoint());
+      if (_pimpl->estimate_cache->saved(endpoints))
       {
-        const auto& cache_result = _pimpl->plan_cache->read(endpoints);
+        const auto& cache_result = _pimpl->estimate_cache->read(endpoints);
         retreat_battery_drain = cache_result.dsoc;
       }
       else
@@ -221,7 +224,8 @@ rmf_utils::optional<rmf_task::Estimate> Clean::estimate_finish(
             rmf_traffic::time::to_seconds(retreat_duration));
         retreat_battery_drain = dSOC_motion + dSOC_ambient;
 
-        _pimpl->plan_cache->save(endpoints, retreat_duration, retreat_battery_drain);
+        _pimpl->estimate_cache->save(endpoints, retreat_duration,
+          retreat_battery_drain);
       }
     }
 

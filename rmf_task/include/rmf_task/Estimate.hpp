@@ -18,6 +18,9 @@
 #ifndef INCLUDE__RMF_TASK__ESTIMATE_HPP
 #define INCLUDE__RMF_TASK__ESTIMATE_HPP
 
+#include <unordered_map>
+#include <utility>
+
 #include <rmf_task/agv/State.hpp>
 #include <rmf_traffic/Time.hpp>
 #include <rmf_utils/impl_ptr.hpp>
@@ -53,6 +56,45 @@ public:
   class Implementation;
 private:
   rmf_utils::impl_ptr<Implementation> _pimpl;
+};
+
+// Stores computed estimates between any 2 waypoints
+class EstimateCache
+{
+  public:
+
+    struct CacheElem
+    {
+      rmf_traffic::Duration duration;
+      double dsoc;
+    };
+
+    bool saved(std::pair<size_t, size_t> waypoints) const
+    {
+      return _cache.count(waypoints);
+    }
+
+    void save(std::pair<size_t, size_t> waypoints,
+      rmf_traffic::Duration duration, double dsoc)
+    {
+      _cache[waypoints] = CacheElem {duration, dsoc};
+    }
+
+    const CacheElem& read(std::pair<size_t, size_t> waypoints)
+    {
+      return _cache[waypoints];
+    }
+
+  private:
+    struct PairHash {
+      size_t operator()(const std::pair<size_t,size_t>& p) const {
+        return std::hash<size_t>()(p.first) ^ std::hash<size_t>()(p.second);
+      }
+    };
+
+    using Cache = std::unordered_map<std::pair<size_t,size_t>,
+      CacheElem, PairHash>;
+    Cache _cache;
 };
 
 } // namespace rmf_task

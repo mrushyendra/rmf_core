@@ -45,7 +45,7 @@ public:
     std::shared_ptr<rmf_battery::MotionPowerSink> motion_sink,
     std::shared_ptr<rmf_battery::DevicePowerSink> device_sink,
     std::shared_ptr<rmf_traffic::agv::Planner> planner,
-    std::shared_ptr<PlanCache> plan_cache,
+    std::shared_ptr<EstimateCache> estimate_cache,
     rmf_traffic::Time start_time,
     bool drain_battery = true);
 

@@ -15,7 +15,7 @@
  *
 */
 
-
+#include <rmf_task/Estimate.hpp>
 #include <rmf_task/agv/TaskPlanner.hpp>
 #include <rmf_task/agv/State.hpp>
 #include <rmf_task/agv/StateConfig.hpp>
@@ -150,7 +150,9 @@ SCENARIO("Grid World")
       rmf_traffic::agv::Planner::Configuration{graph, traits},
       default_options);
 
-  auto plan_cache = std::make_shared<rmf_task::PlanCache>();
+  // Each EstimateCache should be specific to one Planner and one battery/
+  // mechanical/power system
+  auto estimate_cache = std::make_shared<rmf_task::EstimateCache>();
 
   rmf_battery::agv::BatterySystem battery_system{24.0, 40.0, 8.8};
   REQUIRE(battery_system.valid());
@@ -193,7 +195,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -204,7 +206,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -215,7 +217,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery)
     };
@@ -226,7 +228,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache);
+        estimate_cache);
     rmf_task::agv::TaskPlanner task_planner(task_config);
 
     const auto greedy_assignments = task_planner.greedy_plan(
@@ -272,7 +274,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -283,7 +285,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -294,7 +296,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -305,7 +307,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(50000),
         drain_battery),
 
@@ -316,7 +318,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(50000),
         drain_battery),
 
@@ -327,7 +329,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery),
 
@@ -338,7 +340,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery),
 
@@ -349,7 +351,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery),
 
@@ -360,7 +362,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery),
 
@@ -371,7 +373,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery),
 
@@ -382,7 +384,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(60000),
         drain_battery)
     };
@@ -393,7 +395,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache);
+        estimate_cache);
     rmf_task::agv::TaskPlanner task_planner(task_config);
 
     const auto greedy_assignments = task_planner.greedy_plan(
@@ -440,7 +442,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -451,7 +453,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -462,7 +464,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -473,7 +475,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(50000),
         drain_battery)
     };
@@ -484,7 +486,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache);
+        estimate_cache);
     rmf_task::agv::TaskPlanner task_planner(task_config);
 
     const auto greedy_assignments = task_planner.greedy_plan(
@@ -540,7 +542,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -551,7 +553,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -562,7 +564,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(0),
         drain_battery),
 
@@ -573,7 +575,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(50000),
         drain_battery),
 
@@ -584,7 +586,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(50000),
         drain_battery),
 
@@ -595,7 +597,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(70000),
         drain_battery),
 
@@ -606,7 +608,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(70000),
         drain_battery),
 
@@ -617,7 +619,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(70000),
         drain_battery),
 
@@ -628,7 +630,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(70000),
         drain_battery),
 
@@ -639,7 +641,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(70000),
         drain_battery),
 
@@ -650,7 +652,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache,
+        estimate_cache,
         now + rmf_traffic::time::from_seconds(70000),
         drain_battery)
     };
@@ -661,7 +663,7 @@ SCENARIO("Grid World")
         motion_sink,
         device_sink,
         planner,
-        plan_cache);
+        estimate_cache);
     rmf_task::agv::TaskPlanner task_planner(task_config);
 
     const auto greedy_assignments = task_planner.greedy_plan(
