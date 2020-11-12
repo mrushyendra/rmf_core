@@ -44,6 +44,7 @@ public:
   std::shared_ptr<rmf_battery::MotionPowerSink> motion_sink;
   std::shared_ptr<rmf_battery::DevicePowerSink> ambient_sink;
   std::shared_ptr<rmf_traffic::agv::Planner> planner;
+  std::shared_ptr<PlanCache> plan_cache;
   FilterType filter_type;
 
 };
@@ -53,6 +54,7 @@ TaskPlanner::Configuration::Configuration(
   std::shared_ptr<rmf_battery::MotionPowerSink> motion_sink,
   std::shared_ptr<rmf_battery::DevicePowerSink> ambient_sink,
   std::shared_ptr<rmf_traffic::agv::Planner> planner,
+  std::shared_ptr<PlanCache> plan_cache,
   const FilterType filter_type)
 : _pimpl(rmf_utils::make_impl<Implementation>(
       Implementation{
@@ -60,6 +62,7 @@ TaskPlanner::Configuration::Configuration(
         std::move(motion_sink),
         std::move(ambient_sink),
         std::move(planner),
+        std::move(plan_cache),
         filter_type
       }))
 {
@@ -97,6 +100,12 @@ std::shared_ptr<rmf_traffic::agv::Planner> TaskPlanner::Configuration::planner()
 {
   return _pimpl->planner;
 } 
+
+//==============================================================================
+std::shared_ptr<PlanCache> TaskPlanner::Configuration::plan_cache() const
+{
+  return _pimpl->plan_cache;
+}
 
 //==============================================================================
 TaskPlanner::FilterType TaskPlanner::Configuration::filter_type() const
@@ -673,6 +682,7 @@ public:
       config->motion_sink(),
       config->ambient_sink(),
       config->planner(),
+      config->plan_cache(),
       start_time,
       true);
   }

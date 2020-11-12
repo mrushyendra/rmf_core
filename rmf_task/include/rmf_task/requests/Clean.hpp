@@ -50,6 +50,7 @@ public:
     std::shared_ptr<rmf_battery::DevicePowerSink> ambient_sink,
     std::shared_ptr<rmf_battery::DevicePowerSink> cleaning_sink,
     std::shared_ptr<rmf_traffic::agv::Planner> planner,
+    std::shared_ptr<PlanCache> plan_cache,
     rmf_traffic::Time start_time,
     bool drain_battery = true);
 
