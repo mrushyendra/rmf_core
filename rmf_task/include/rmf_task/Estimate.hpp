@@ -58,43 +58,34 @@ private:
   rmf_utils::impl_ptr<Implementation> _pimpl;
 };
 
-// Stores computed estimates between any 2 waypoints
+/// Stores computed estimates between any 2 waypoints
 class EstimateCache
 {
-  public:
+public:
+  /// Constructs empty EstimateCache
+  EstimateCache();
 
-    struct CacheElem
-    {
-      rmf_traffic::Duration duration;
-      double dsoc;
-    };
+  /// Struct containing the estimated duration and charge consumed to travel between
+  /// a waypoint pair.
+  struct CacheElem
+  {
+    rmf_traffic::Duration duration;
+    double dsoc; // positive if charge is consumed
+  };
 
-    bool saved(std::pair<size_t, size_t> waypoints) const
-    {
-      return _cache.count(waypoints);
-    }
+  /// Returns true if an estimate between the supplied waypoints exists in the cache.
+  bool saved(std::pair<size_t, size_t> waypoints) const;
 
-    void save(std::pair<size_t, size_t> waypoints,
-      rmf_traffic::Duration duration, double dsoc)
-    {
-      _cache[waypoints] = CacheElem {duration, dsoc};
-    }
+  /// Saves the duration and estimate change in charge between the supplied waypoints.
+  void save(std::pair<size_t, size_t> waypoints,
+    rmf_traffic::Duration duration, double dsoc);
 
-    const CacheElem& read(std::pair<size_t, size_t> waypoints)
-    {
-      return _cache[waypoints];
-    }
+  /// Returns the saved estimate values for the path between the supplied waypoints.
+  const CacheElem& read(std::pair<size_t, size_t> waypoints);
 
-  private:
-    struct PairHash {
-      size_t operator()(const std::pair<size_t,size_t>& p) const {
-        return std::hash<size_t>()(p.first) ^ std::hash<size_t>()(p.second);
-      }
-    };
-
-    using Cache = std::unordered_map<std::pair<size_t,size_t>,
-      CacheElem, PairHash>;
-    Cache _cache;
+  class Implementation;
+private:
+  rmf_utils::impl_ptr<Implementation> _pimpl;
 };
 
 } // namespace rmf_task
