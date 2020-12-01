@@ -131,7 +131,7 @@ rmf_utils::optional<rmf_task::Estimate> ChargeBattery::estimate_finish_2(
   {
     next_task_duration = cache_result->duration;
   }
-  else
+  else if (next_task_endpoints.first != next_task_endpoints.second)
   {
     // Compute plan to pickup waypoint along with battery drain
     rmf_traffic::agv::Planner::Goal goal{next_task_endpoints.second};
@@ -240,7 +240,7 @@ rmf_utils::optional<rmf_task::Estimate> ChargeBattery::estimate_finish(
 {
   if (abs(initial_state.battery_soc() - _pimpl->_charge_soc) < 1e-3)
   {
-    std::cout << "fully charged " << std::endl;
+    //std::cout << "fully charged " << std::endl;
     return rmf_utils::nullopt;
   }
 

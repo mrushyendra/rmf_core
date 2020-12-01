@@ -767,7 +767,7 @@ SCENARIO("Grid World")
     REQUIRE(optimal_cost <= greedy_cost);
   }
 
-  WHEN("A loop request is impossible to fulfil")
+  /*WHEN("A loop request is impossible to fulfil")
   {
     const auto now = std::chrono::steady_clock::now();
     const double default_orientation = 0.0;
@@ -829,6 +829,6 @@ SCENARIO("Grid World")
   REQUIRE(optimal_assignments.empty());
   REQUIRE(greedy_assignments.empty());
   REQUIRE(optimal_cost <= greedy_cost);
-  }
+  }*/
 
 }
