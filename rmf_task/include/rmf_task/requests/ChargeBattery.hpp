@@ -50,6 +50,13 @@ public:
 
   std::string id() const final;
 
+  rmf_utils::optional<rmf_task::Estimate> estimate_finish_2(
+    const agv::State& initial_state,
+    const agv::StateConfig& state_config,
+    const std::shared_ptr<EstimateCache> estimate_cache,
+    rmf_traffic::Time next_task_start_time,
+    std::size_t next_task_start_waypoint) const;
+
   rmf_utils::optional<rmf_task::Estimate> estimate_finish(
     const agv::State& initial_state,
     const agv::StateConfig& state_config,

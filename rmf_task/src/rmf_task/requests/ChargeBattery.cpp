@@ -18,6 +18,7 @@
 #include <string>
 #include <sstream>
 #include <random>
+#include <iostream>
 
 #include <rmf_task/requests/ChargeBattery.hpp>
 
@@ -106,6 +107,131 @@ std::string ChargeBattery::id() const
   return _pimpl->_id;
 }
 
+// new function
+// pass in next task start, next task earliest_start time
+// compute earliest end time
+// compute charge task total duration
+// if start time + charge task duration > earliest end time:
+//    return
+// modify finish state to = earliest end time
+//    return
+rmf_utils::optional<rmf_task::Estimate> ChargeBattery::estimate_finish_2(
+  const agv::State& initial_state,
+  const agv::StateConfig& state_config,
+  const std::shared_ptr<EstimateCache> estimate_cache,
+  rmf_traffic::Time next_task_start_time,
+  std::size_t next_task_start_waypoint) const
+{
+  rmf_traffic::Duration next_task_duration(0);
+  const auto next_task_endpoints = std::make_pair(initial_state.charging_waypoint(),
+  next_task_start_waypoint);
+  const auto& cache_result = estimate_cache->get(next_task_endpoints);
+  // Use previously memoized values if possible
+  if (cache_result)
+  {
+    next_task_duration = cache_result->duration;
+  }
+  else
+  {
+    // Compute plan to pickup waypoint along with battery drain
+    rmf_traffic::agv::Planner::Goal goal{next_task_endpoints.second};
+    const auto result_to_pickup = _pimpl->_planner->plan(
+      initial_state.location(), goal);
+    // We assume we can always compute a plan
+    const auto& trajectory =
+      result_to_pickup->get_itinerary().back().trajectory();
+    const auto& finish_time = *trajectory.finish_time();
+    next_task_duration = finish_time - initial_state.finish_time();
+  }
+  // time robot should start moving towards start waypoint of next task
+  const rmf_traffic::Time earliest_end_time = next_task_start_time - next_task_duration;
+  //std::cout << "charge earliest end time: " << rmf_traffic::time::to_seconds(earliest_end_time.time_since_epoch()) << std::endl;
+
+
+  // Compute time taken to reach charging waypoint from current location
+  rmf_traffic::agv::Plan::Start final_plan_start{
+    initial_state.finish_time(),
+    initial_state.charging_waypoint(),
+    initial_state.location().orientation()};
+  agv::State state{
+    std::move(final_plan_start),
+    initial_state.charging_waypoint(),
+    initial_state.battery_soc()};
+
+  const auto start_time = initial_state.finish_time();
+
+  double battery_soc = initial_state.battery_soc();
+  double dSOC_motion = 0.0;
+  double dSOC_device = 0.0;
+  rmf_traffic::Duration variant_duration(0);
+
+  if (initial_state.waypoint() != initial_state.charging_waypoint())
+  {
+    const auto endpoints = std::make_pair(initial_state.waypoint(),
+      initial_state.charging_waypoint());
+    const auto& cache_result = estimate_cache->get(endpoints);
+    // Use memoized values if possible
+    if (cache_result)
+    {
+      variant_duration = cache_result->duration;
+      battery_soc = battery_soc - cache_result->dsoc;
+    }
+    else
+    {
+      // Compute plan to charging waypoint along with battery drain
+      rmf_traffic::agv::Planner::Goal goal{endpoints.second};
+      const auto result = _pimpl->_planner->plan(
+        initial_state.location(), goal);
+      const auto& trajectory = result->get_itinerary().back().trajectory();
+      const auto& finish_time = *trajectory.finish_time();
+      variant_duration = finish_time - start_time;
+
+      if (_pimpl->_drain_battery)
+      {
+        dSOC_motion = _pimpl->_motion_sink->compute_change_in_charge(
+          trajectory);
+        dSOC_device = _pimpl->_device_sink->compute_change_in_charge(
+          rmf_traffic::time::to_seconds(variant_duration));
+        battery_soc = battery_soc - dSOC_motion - dSOC_device;
+      }
+
+      estimate_cache->set(endpoints, variant_duration,
+        dSOC_motion + dSOC_device);
+    }
+
+    // If a robot cannot reach its charging dock given its initial battery soc
+    if (battery_soc <= state_config.threshold_soc())
+      return rmf_utils::nullopt;
+  }
+
+  // Default _charge_soc = 1.0
+  double delta_soc = _pimpl->_charge_soc - battery_soc;
+  assert(delta_soc >= 0.0);
+  double time_to_charge =
+    (3600 * delta_soc * _pimpl->_battery_system->capacity()) /
+    _pimpl->_battery_system->charging_current();
+
+  const rmf_traffic::Time wait_until = initial_state.finish_time();
+  const rmf_traffic::Time actual_end_time = wait_until + variant_duration +
+    rmf_traffic::time::from_seconds(time_to_charge);
+
+  if (actual_end_time < earliest_end_time)
+  {
+    state.finish_time(earliest_end_time);
+  }
+  else
+  {
+    state.finish_time(
+      wait_until + variant_duration +
+      rmf_traffic::time::from_seconds(time_to_charge));
+  }
+  state.battery_soc(_pimpl->_charge_soc);
+
+  return Estimate(state, wait_until);
+
+
+}
+
 //==============================================================================
 rmf_utils::optional<rmf_task::Estimate> ChargeBattery::estimate_finish(
   const agv::State& initial_state,
@@ -113,7 +239,10 @@ rmf_utils::optional<rmf_task::Estimate> ChargeBattery::estimate_finish(
   const std::shared_ptr<EstimateCache> estimate_cache) const
 {
   if (abs(initial_state.battery_soc() - _pimpl->_charge_soc) < 1e-3)
+  {
+    std::cout << "fully charged " << std::endl;
     return rmf_utils::nullopt;
+  }
 
   // Compute time taken to reach charging waypoint from current location
   rmf_traffic::agv::Plan::Start final_plan_start{

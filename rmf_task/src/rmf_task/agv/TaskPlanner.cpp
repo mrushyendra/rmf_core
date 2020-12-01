@@ -19,6 +19,7 @@
 #include <rmf_task/Estimate.hpp>
 #include <rmf_task/agv/State.hpp>
 #include <rmf_task/requests/ChargeBattery.hpp>
+#include <rmf_task/requests/Delivery.hpp>
 
 #include <rmf_traffic/Time.hpp>
 
@@ -251,7 +252,9 @@ public:
     State previous_state,
     bool require_charge_battery)
   {
+    //std::cout << "in update_candidate. candidate: " << candidate << " candidates map size: " << _candidate_map.size() << std::endl;
     const auto it = _candidate_map.at(candidate);
+    //std::cout << "got candidate " << std::endl;
     _value_map.erase(it);
     _candidate_map[candidate] = _value_map.insert(
       {
@@ -260,7 +263,7 @@ public:
       });
   }
 
-private:
+//private:
   Map _value_map;
   std::vector<Map::iterator> _candidate_map;
 
@@ -310,11 +313,17 @@ std::shared_ptr<Candidates> Candidates::make(
     }
     else
     {
-      auto battery_estimate =
-        charge_battery_request.estimate_finish(
-          state, state_config, estimate_cache);
+      rmf_task::requests::Delivery* next_request = (rmf_task::requests::Delivery*) &request;
+      auto battery_estimate = ((rmf_task::requests::ChargeBattery*)(&charge_battery_request))->estimate_finish_2(
+        state, state_config, estimate_cache,
+        next_request->earliest_start_time(),
+        next_request->pickup_waypoint());
+      //auto battery_estimate =
+      //  charge_battery_request.estimate_finish(
+      //    state, state_config, estimate_cache);
       if (battery_estimate.has_value())
       {
+        //std::cout << "charge finish time: " << rmf_traffic::time::to_seconds(battery_estimate.value().finish_state().finish_time().time_since_epoch()) << std::endl;
         auto new_finish = request.estimate_finish(
           battery_estimate.value().finish_state(), state_config, estimate_cache);
         if (new_finish.has_value())
@@ -328,6 +337,14 @@ std::shared_ptr<Candidates> Candidates::make(
               state,
               true}});
         }
+        else
+        {
+          std::cout << "unable to complete task at all " << std::endl;
+        }
+      }
+      else
+      {
+        std::cout << "unable to complete task even after charge/ or charge not possible " << std::endl;
       }
     }
     
@@ -382,7 +399,7 @@ std::shared_ptr<PendingTask> PendingTask::make(
 {
   const auto candidates = Candidates::make(initial_states, state_configs,
         *request_, *charge_battery_request, estimate_cache);
-  
+  //std::cout << "candidates size: " << candidates->_candidate_map.size() << std::endl;
   if (!candidates)
     return nullptr;
 
@@ -983,13 +1000,14 @@ public:
     const std::vector<StateConfig>& state_configs)
 
   {
+    //std::cout << "in expand_candidate" << std::endl;
     const auto& entry = it->second;
     const auto& state_config = state_configs[entry.candidate];
-
     if (parent->latest_time + segmentation_threshold < entry.wait_until)
     {
 
       // No need to assign task as timeline is not relevant
+      //std::cout << "retuning from expand_candidate invalid" << std::endl;
       return nullptr;
     }
 
@@ -1004,8 +1022,13 @@ public:
           assignments.back().assignment.request()))
       {
         auto charge_battery = make_charging_request(entry.previous_state.finish_time());
-        auto battery_estimate = charge_battery->estimate_finish(
-          entry.previous_state, state_config, estimate_cache);
+        std::shared_ptr<const rmf_task::requests::Delivery> next_request = std::dynamic_pointer_cast<const rmf_task::requests::Delivery>(u.second.request);
+        auto battery_estimate = (std::dynamic_pointer_cast<const rmf_task::requests::ChargeBattery>(charge_battery))->estimate_finish_2(
+          entry.previous_state, state_config, estimate_cache,
+          next_request->earliest_start_time(),
+          next_request->pickup_waypoint());
+        //auto battery_estimate = charge_battery->estimate_finish(
+        //  entry.previous_state, state_config, estimate_cache);
         if (battery_estimate.has_value())
         {
           assignments.push_back(
@@ -1033,6 +1056,7 @@ public:
     bool add_charger = false;
     for (auto& new_u : new_node->unassigned_tasks)
     {
+      //std::cout << "candidates size: " << new_u.second.candidates._candidate_map.size() << std::endl;
       const auto finish =
         new_u.second.request->estimate_finish(
           entry.state, state_config, estimate_cache);
@@ -1081,6 +1105,7 @@ public:
         entry.state, state_config, estimate_cache);
       if (battery_estimate.has_value())
       {
+        //std::cout << "battery has value " << std::endl;
         new_node->assigned_tasks[entry.candidate].push_back(
           { new_node->get_available_internal_id(true),
             Assignment
@@ -1091,6 +1116,7 @@ public:
             }});
         for (auto& new_u : new_node->unassigned_tasks)
         {
+          //std::cout << "estimating new finish " << std::endl;
           const auto finish =
             new_u.second.request->estimate_finish(battery_estimate.value().finish_state(),
               state_config, estimate_cache);
@@ -1101,14 +1127,16 @@ public:
           }
           else
           {
+            //std::cout << "retuning from expand_candidate 1" << std::endl;
             // We should stop expanding this node
             return nullptr;
           }
+          //std::cout << "done estimating new finish" << std::endl;
         }
-        
       }
       else
       {
+        //std::cout << "retuning from expand_candidate 2" << std::endl;
         // Agent cannot make it back to the charger
         return nullptr;
       }
@@ -1121,9 +1149,11 @@ public:
     // Apply filter
     if (filter && filter->ignore(*new_node))
     {
+      //std::cout << "retuning from expand_candidate 3" << std::endl;
       return nullptr;
     }
 
+    //std::cout << "retuning from expand_candidate 4" << std::endl;
     return new_node;
 
   }
@@ -1200,12 +1230,14 @@ public:
   {
     while (!finished(*node))
     {
+      //std::cout << "starting iteration " << std::endl;
       ConstNodePtr next_node = nullptr;
       for (const auto& u : node->unassigned_tasks)
       {
         const auto& range = u.second.candidates.best_candidates();
         for (auto it = range.begin; it != range.end; ++it)
         {
+          //std::cout << "picking candidate " << std::endl;
           if (auto n = expand_candidate(
             it, u, node, nullptr, time_now, state_configs))
           {
@@ -1213,9 +1245,11 @@ public:
               {
                 next_node = std::move(n);
               }
+            //std::cout << "expansion over " << std::endl;
           }
           else
           {
+            //std::cout << "backtracking " << std::endl;
             // expand_candidate returned nullptr either due to start time
             // segmentation or insufficient charge to return to its charger. 
             // For the later case, we aim to backtrack and assign a charging
@@ -1226,6 +1260,7 @@ public:
               while (!parent_node->assigned_tasks[it->second.candidate].empty())
               {
                 parent_node->assigned_tasks[it->second.candidate].pop_back();
+                //std::cout << "candidates size: " << new_u.second.candidates._candidate_map.size() << std::endl;
                 auto new_charge_node = expand_charger(
                   parent_node,
                   it->second.candidate,
@@ -1239,12 +1274,14 @@ public:
                 }
               }
             }
+            //std::cout << "backtracking over " << std::endl;
           }
         }
       }
 
       node = next_node;
       assert(node);
+      //std::cout << "end iteration "  << std::endl;
     }
 
     return node;

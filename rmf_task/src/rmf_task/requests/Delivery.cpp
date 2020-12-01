@@ -16,6 +16,7 @@
 */
 
 #include <map>
+#include <iostream>
 
 #include <rmf_task/requests/Delivery.hpp>
 
@@ -182,9 +183,22 @@ rmf_utils::optional<rmf_task::Estimate> Delivery::estimate_finish(
   }
 
   const rmf_traffic::Time ideal_start = _pimpl->_start_time - variant_duration;
+  //std::cout << "delivery ideal start time: " << rmf_traffic::time::to_seconds(ideal_start.time_since_epoch()) << std::endl;
   const rmf_traffic::Time wait_until =
     initial_state.finish_time() > ideal_start ?
     initial_state.finish_time() : ideal_start;
+
+  if (wait_until > initial_state.finish_time())
+  {
+    rmf_traffic::Duration wait_duration(wait_until - initial_state.finish_time());
+    dSOC_device = _pimpl->_device_sink->compute_change_in_charge(
+      rmf_traffic::time::to_seconds(wait_duration));
+    battery_soc = battery_soc - dSOC_device;
+    if (battery_soc <= state_config.threshold_soc())
+    {
+      return rmf_utils::nullopt;
+    }
+  }
 
   // Factor in invariants
   state.finish_time(
